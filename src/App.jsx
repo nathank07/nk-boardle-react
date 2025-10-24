@@ -3,19 +3,20 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import { Chess } from 'chess.js'
+import ChessBoard from './ChessBoard.tsx'
 
 async function ChessTest() {
     const chess = new Chess();
-    const puzzle = await fetch('/new-puzzle')
+    const puzzle = await fetch('/api/new-puzzle')
     const puzzleData = await puzzle.json()
-    console.log(puzzleData)
     chess.load(puzzleData.fen)
-    console.log(chess.ascii());
-    return null;
+    return chess;
 }
 
 function App() {
   const [count, setCount] = useState(0)
+  const [chessGame, setChessGame] = useState(null)
+  const [colorPerspective, setColorPerspective] = useState('w')
 
   return (
     <>
@@ -29,17 +30,28 @@ function App() {
       </div>
       <h1>Vite + React</h1>
       <div className="card">
-        <button onClick={() =>  {
+        <button onClick={async () =>  {
             setCount((count) => count + 1)
-            ChessTest()
-        }
-            }>
+            const chess = await ChessTest()
+            setChessGame(chess)
+            console.log(chess.turn())
+        }}>
           count is {count}
+        </button>
+        <button onClick={() => {
+            setColorPerspective(colorPerspective === 'w' ? 'b' : 'w')
+        }}>
+            Flip Perspective (Currently {colorPerspective})
         </button>
         <p>
           Edit <code>src/App.jsx</code> and save to test HMR
         </p>
       </div>
+        {chessGame && (
+        <ChessBoard pxSize={750} chessGame={chessGame} colorPerspective={colorPerspective} />
+      )}
+      
+      {/* <Example /> */}
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more
       </p>
