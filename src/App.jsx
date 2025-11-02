@@ -10,6 +10,7 @@ async function ChessTest() {
     const puzzle = await fetch('/api/new-puzzle')
     const puzzleData = await puzzle.json()
     chess.load(puzzleData.fen)
+    chess.move(puzzleData.firstMove)
     return chess;
 }
 

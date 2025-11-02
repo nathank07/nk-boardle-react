@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, DO_NOT_USE_OR_YOU_WILL_BE_FIRED_CALLBACK_REF_RETURN_VALUES } from 'react';
 import { Chess, PieceSymbol, Color, Square } from 'chess.js'
 import { DndContext, PointerSensor, pointerWithin, rectIntersection, useSensor, useSensors } from '@dnd-kit/core';
 import { useDroppable } from '@dnd-kit/core';
@@ -42,6 +42,15 @@ const getPieces = (game: Chess) => chessTypeSquares
             acc[curr!.square] = { piece: curr!.piece, color: curr!.color };
             return acc;
         }, {} as Record<Square, Piece>);
+
+const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
+    const history = game.history({ verbose: true });
+    if (history.length >= 1) {
+        const lastMove = history[history.length - 1];
+        return { from: lastMove.from, to: lastMove.to };
+    }
+    return null;
+}
 
 const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: Color): Square | null => {
         const squareSize = pxSize / 8;
@@ -87,6 +96,7 @@ function DraggablePiece({id, src, style}: {id: string; src: string; style?: Reac
     const pieceStyle: React.CSSProperties = {
         transform: CSS.Translate.toString(transform),
         ...style,
+        zIndex: 1,
     };
     
     return (
@@ -106,7 +116,10 @@ function DraggablePiece({id, src, style}: {id: string; src: string; style?: Reac
 interface DroppableChessCanvasBgProps {
     pxSize: number;
     colorPerspective: Color;
-    currentPosition: { x: number; y: number } | null;
+    highlightHover: Square | null;
+    previousMove: { from: Square; to: Square } | null;
+    previewMoves: Square[] | null;
+    takeMoves: Square[] | null;
     children: React.ReactNode;
 }
 
@@ -117,7 +130,6 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
     });
     
 
-    const black = props.colorPerspective == 'b';
     const dark = '#b58863';
     const light = '#f0d9b5';
 
@@ -129,11 +141,13 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
         const ctx = board.getContext('2d');
         if (!ctx) return;
 
+
+        // 8x8 chessboard bg drawing
         board.width = props.pxSize;
         board.height = props.pxSize;
-        ctx.fillStyle = black ? dark : light;
+        ctx.fillStyle = light;
         ctx.fillRect(0, 0, props.pxSize, props.pxSize);
-        ctx.fillStyle = !black ? dark : light;
+        ctx.fillStyle = dark;
         chessTypeSquares.forEach((square, i) => {
             const rect = mapSquareToPxRect(square as Square, props.pxSize, props.colorPerspective);
             if (((i % 8) + Math.floor(i / 8)) % 2 === 0) {
@@ -141,22 +155,30 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
             }
         });
 
-        // Highlight current position if piece is being dragged
-        if (props.currentPosition) {
-            const targetSquare = mapPxToSquare(
-                props.currentPosition.x,
-                props.currentPosition.y,
-                props.pxSize,
-                props.colorPerspective
-            );
-            const rect = mapSquareToPxRect(targetSquare as Square, props.pxSize, props.colorPerspective);
+        // Show previous move
+        if (props.previousMove) {
+            const fromRect = mapSquareToPxRect(props.previousMove.from, props.pxSize, props.colorPerspective);
+            const toRect = mapSquareToPxRect(props.previousMove.to, props.pxSize, props.colorPerspective);
             
+            ctx.fillStyle = 'rgba(246, 246, 105, 0.6)';
+            ctx.fillRect(fromRect.x, fromRect.y, fromRect.width, fromRect.height);
+            ctx.fillRect(toRect.x, toRect.y, toRect.width, toRect.height);
+        }
+
+        // Show hover highlight
+        if (props.highlightHover) {
+            const rect = mapSquareToPxRect(props.highlightHover, props.pxSize, props.colorPerspective);
+
             ctx.fillStyle = 'rgba(0, 180, 235, 0.3)';
             ctx.strokeStyle = 'rgba(0, 180, 235, 0.8)';
             ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
             ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
         }
-    }, [props.pxSize, props.colorPerspective, props.currentPosition]);
+
+        // Show squares piece can move to
+
+        // Show squares piece can move to and take
+    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove]);
 
     return (
             <div
@@ -178,9 +200,11 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
 }
 
 function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: number; chessGame: Chess; colorPerspective: Color }) {
-    const [hoveringPieceOver, setHoveringPieceOver] = useState<{ x: number, y: number } | null>(null);
+    const [hoveringPieceOver, setHoveringPieceOver] = useState<Square | null>(null);
+    const [delta, setDelta] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
     function handleDragEnd(event: any) {
+        event.activatorEvent.target.style.zIndex = 1;
         if(!event.over) return
         setHoveringPieceOver(null);
         const {x, y} = event.delta;
@@ -191,46 +215,64 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
         const targetSquare = mapPxToSquare(newX, newY, pxSize, colorPerspective);
         
         if (targetSquare && oldSquare !== targetSquare) {
-            const move = chessGame.move({
-                from: oldSquare as Square,
-                to: targetSquare as Square,
-            });
-            
-            if (move) {
-                setPieces(getPieces(chessGame)); 
-            }
+            movePiece(oldSquare, targetSquare);
         }
     }
 
     function handleDragMove(event: any) {
         if (event.active) {
+            // Keep the dragged piece on top
             event.activatorEvent.target.style.zIndex = 9999;
+
+            // Get current position of dragged piece based on delta
+            // The new position can be found with mapPxToSquare
             const { x, y } = event.delta;
-            const { x: oldX, y: oldY } = hoveringPieceOver || {};
+            const { x: oldX, y: oldY } = delta || {};
             const sourceSquare = event.active.id as Square;
             const rect = mapSquareToPxRect(sourceSquare, pxSize, colorPerspective);
             const newX = rect.x + x + rect.width / 2;
             const newY = rect.y + y + rect.width / 2;
 
-            // Prevent redraws if still over the same square
+            // Prevent redraws if still over the same square 
+            // by comparing old and new square positions
             const oldSquare = mapPxToSquare(oldX || (rect.x + rect.width / 2), 
                                             oldY || (rect.y + rect.height / 2), 
                                             pxSize, colorPerspective);
             const targetSquare = mapPxToSquare(newX, newY, pxSize, colorPerspective);
+
+            // If the piece is not over a square then you don't need to highlight anything
             if (targetSquare === null) {
                 setHoveringPieceOver(null);
                 return;
             }
+
+            // Only update if the square has changed
             if (oldSquare !== targetSquare || hoveringPieceOver === null) {
-                setHoveringPieceOver({ x: newX, y: newY });
+                setDelta({ x, y });
+                setHoveringPieceOver(targetSquare);
             }
         }
     }
     
     const [pieces, setPieces] = useState<Record<Square, Piece>>(getPieces(chessGame));
+    const [previousMove, setPreviousMove] = useState<{ from: Square; to: Square } | null>(getPreviousMove(chessGame));
+
+    function movePiece(from: Square, to: Square) {
+        try {
+            chessGame.move({
+                from: from,
+                to: to,
+            });
+            setPieces(getPieces(chessGame));
+            setPreviousMove({ from, to });
+        } catch {
+            console.error("Invalid move");
+        }
+    }
 
     useEffect(() => {
         setPieces(getPieces(chessGame));
+        setPreviousMove(getPreviousMove(chessGame));
     }, [chessGame]);
 
     
@@ -248,7 +290,10 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
         <DroppableChessCanvasBg
             pxSize={pxSize}
             colorPerspective={colorPerspective}
-            currentPosition={hoveringPieceOver}
+            highlightHover={hoveringPieceOver}
+            previousMove={previousMove}
+            previewMoves={null}
+            takeMoves={null}
             children={Object.entries(pieces).map(([square, p]) => {
             const rect = mapSquareToPxRect(square as Square, pxSize, colorPerspective);
             const imgKey = (p.color + p.piece.toUpperCase()) as keyof typeof pieceImages;
