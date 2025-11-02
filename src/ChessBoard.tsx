@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, DO_NOT_USE_OR_YOU_WILL_BE_FIRED_CALLBACK_REF_RETURN_VALUES } from 'react';
+import { useRef, useEffect, useState, DO_NOT_USE_OR_YOU_WILL_BE_FIRED_CALLBACK_REF_RETURN_VALUES, use } from 'react';
 import { Chess, PieceSymbol, Color, Square } from 'chess.js'
 import { DndContext, PointerSensor, pointerWithin, rectIntersection, useSensor, useSensors } from '@dnd-kit/core';
 import { useDroppable } from '@dnd-kit/core';
@@ -52,6 +52,11 @@ const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
     return null;
 }
 
+const getMovesForSquare = (game: Chess, square: Square): Square[] => {
+    const moves = game.moves({ square: square, verbose: true });
+    return moves.map(m => m.to);
+}
+
 const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: Color): Square | null => {
         const squareSize = pxSize / 8;
         const col = Math.floor(x / squareSize);
@@ -64,7 +69,7 @@ const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: C
         return String.fromCharCode(97 + mappedCol) + (mappedRow + 1) as Square;
     }
 
-const mapSquareToPxRect = (square: Square, pxSize, colorPerspective) => {
+const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Color) => {
     const squareSize = pxSize / 8;
     const col = colorPerspective === 'b' ? 7 - (square.charCodeAt(0) - 97) : square.charCodeAt(0) - 97;
     const row = colorPerspective === 'b' ? parseInt(square[1]) - 1 : 8 - parseInt(square[1]);
@@ -168,7 +173,6 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
         // Show hover highlight
         if (props.highlightHover) {
             const rect = mapSquareToPxRect(props.highlightHover, props.pxSize, props.colorPerspective);
-
             ctx.fillStyle = 'rgba(0, 180, 235, 0.3)';
             ctx.strokeStyle = 'rgba(0, 180, 235, 0.8)';
             ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
@@ -176,9 +180,22 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
         }
 
         // Show squares piece can move to
+        if (props.previewMoves) {
+            props.previewMoves.forEach((square) => {
+                if (square === props.highlightHover) return;
+                const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
+                ctx.fillStyle = 'rgba(0, 180, 235, 0.3)';
+                ctx.strokeStyle = 'rgba(10, 10, 10, 0.8)';
+                
+                ctx.beginPath();
+                ctx.arc(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width / 6, 0, 2 * Math.PI);
+                ctx.fill();
+                //ctx.stroke();
+            });
+        }
 
         // Show squares piece can move to and take
-    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove]);
+    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves, props.takeMoves]);
 
     return (
             <div
@@ -205,8 +222,9 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
 
     function handleDragEnd(event: any) {
         event.activatorEvent.target.style.zIndex = 1;
-        if(!event.over) return
         setHoveringPieceOver(null);
+        setPreviewMoves([]);
+        if(!event.over) return        
         const {x, y} = event.delta;
         const oldSquare = event.active.id as Square;
         const rect = mapSquareToPxRect(oldSquare, pxSize, colorPerspective);
@@ -233,6 +251,9 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
             const newX = rect.x + x + rect.width / 2;
             const newY = rect.y + y + rect.width / 2;
 
+            // Update preview moves for the piece being dragged
+            setPreviewMoves(getMovesForSquare(chessGame, sourceSquare));
+
             // Prevent redraws if still over the same square 
             // by comparing old and new square positions
             const oldSquare = mapPxToSquare(oldX || (rect.x + rect.width / 2), 
@@ -256,6 +277,7 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
     
     const [pieces, setPieces] = useState<Record<Square, Piece>>(getPieces(chessGame));
     const [previousMove, setPreviousMove] = useState<{ from: Square; to: Square } | null>(getPreviousMove(chessGame));
+    const [previewMoves, setPreviewMoves] = useState<Square[]>([]);
 
     function movePiece(from: Square, to: Square) {
         try {
@@ -273,9 +295,9 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
     useEffect(() => {
         setPieces(getPieces(chessGame));
         setPreviousMove(getPreviousMove(chessGame));
+        setPreviewMoves([]);
     }, [chessGame]);
 
-    
     const pieceImages = {
         "wR": wR, "wN": wN, "wB": wB, "wQ": wQ, "wK": wK, "wP": wP,
         "bR": bR, "bN": bN, "bB": bB, "bQ": bQ, "bK": bK, "bP": bP,
@@ -292,7 +314,7 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
             colorPerspective={colorPerspective}
             highlightHover={hoveringPieceOver}
             previousMove={previousMove}
-            previewMoves={null}
+            previewMoves={previewMoves}
             takeMoves={null}
             children={Object.entries(pieces).map(([square, p]) => {
             const rect = mapSquareToPxRect(square as Square, pxSize, colorPerspective);
