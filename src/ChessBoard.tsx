@@ -52,9 +52,21 @@ const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
     return null;
 }
 
-const getMovesForSquare = (game: Chess, square: Square): Square[] => {
+const getMovesForSquare = (game: Chess, square: Square): { moves: Square[], takeables: Square[] } => {
     const moves = game.moves({ square: square, verbose: true });
-    return moves.map(m => m.to);
+    return moves
+        .map(m => m.to)
+        .map(m => {
+            return game.get(m) ? { move: null, take: m } : { move: m, take: null };
+        })
+        .reduce(
+            (acc, curr) => {
+                if (curr.move) acc.moves.push(curr.move);
+                if (curr.take) acc.takeables.push(curr.take);
+                return acc;
+            },
+            { moves: [] as Square[], takeables: [] as Square[] }
+        );
 }
 
 const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: Color): Square | null => {
@@ -123,8 +135,7 @@ interface DroppableChessCanvasBgProps {
     colorPerspective: Color;
     highlightHover: Square | null;
     previousMove: { from: Square; to: Square } | null;
-    previewMoves: Square[] | null;
-    takeMoves: Square[] | null;
+    previewMoves: { moves: Square[]; takeables: Square[] } | null;
     children: React.ReactNode;
 }
 
@@ -181,7 +192,7 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
 
         // Show squares piece can move to
         if (props.previewMoves) {
-            props.previewMoves.forEach((square) => {
+            props.previewMoves.moves.forEach((square) => {
                 if (square === props.highlightHover) return;
                 const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
                 ctx.fillStyle = 'rgba(0, 180, 235, 0.3)';
@@ -192,10 +203,19 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
                 ctx.fill();
                 //ctx.stroke();
             });
+
+            props.previewMoves.takeables.forEach((square) => {
+                if (square === props.highlightHover) return;
+                const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                ctx.strokeStyle = 'rgba(10, 10, 10, 0.8)';
+                ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+                ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+            });
         }
 
         // Show squares piece can move to and take
-    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves, props.takeMoves]);
+    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves]);
 
     return (
             <div
@@ -223,7 +243,7 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
     function handleDragEnd(event: any) {
         event.activatorEvent.target.style.zIndex = 1;
         setHoveringPieceOver(null);
-        setPreviewMoves([]);
+        setPreviewMoves({ moves: [], takeables: [] });
         if(!event.over) return        
         const {x, y} = event.delta;
         const oldSquare = event.active.id as Square;
@@ -277,7 +297,7 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
     
     const [pieces, setPieces] = useState<Record<Square, Piece>>(getPieces(chessGame));
     const [previousMove, setPreviousMove] = useState<{ from: Square; to: Square } | null>(getPreviousMove(chessGame));
-    const [previewMoves, setPreviewMoves] = useState<Square[]>([]);
+    const [previewMoves, setPreviewMoves] = useState<{ moves: Square[]; takeables: Square[] }>({ moves: [], takeables: [] });
 
     function movePiece(from: Square, to: Square) {
         try {
@@ -295,7 +315,7 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
     useEffect(() => {
         setPieces(getPieces(chessGame));
         setPreviousMove(getPreviousMove(chessGame));
-        setPreviewMoves([]);
+        setPreviewMoves({ moves: [], takeables: [] });
     }, [chessGame]);
 
     const pieceImages = {
@@ -315,7 +335,6 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
             highlightHover={hoveringPieceOver}
             previousMove={previousMove}
             previewMoves={previewMoves}
-            takeMoves={null}
             children={Object.entries(pieces).map(([square, p]) => {
             const rect = mapSquareToPxRect(square as Square, pxSize, colorPerspective);
             const imgKey = (p.color + p.piece.toUpperCase()) as keyof typeof pieceImages;
