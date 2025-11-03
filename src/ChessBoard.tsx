@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, DO_NOT_USE_OR_YOU_WILL_BE_FIRED_CALLBACK_REF_RETURN_VALUES, use } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { Chess, PieceSymbol, Color, Square } from 'chess.js'
 import { DndContext, PointerSensor, pointerWithin, rectIntersection, useSensor, useSensors } from '@dnd-kit/core';
 import { useDroppable } from '@dnd-kit/core';
@@ -45,11 +45,8 @@ const getPieces = (game: Chess) => chessTypeSquares
 
 const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
     const history = game.history({ verbose: true });
-    if (history.length >= 1) {
-        const lastMove = history[history.length - 1];
-        return { from: lastMove.from, to: lastMove.to };
-    }
-    return null;
+    const lastMove = history.at(-1);
+    return lastMove ? { from: lastMove.from, to: lastMove.to } : null;
 }
 
 const getMovesForSquare = (game: Chess, square: Square): { moves: Square[], takeables: Square[] } => {
@@ -68,6 +65,75 @@ const getMovesForSquare = (game: Chess, square: Square): { moves: Square[], take
             { moves: [] as Square[], takeables: [] as Square[] }
         );
 }
+
+const getPieceMovements = (chessGameA: Chess, chessGameB: Chess) => {
+    const historyA = getPieces(chessGameA);
+    const historyB = getPieces(chessGameB);
+    
+    const remove: Record<Square, Piece> = Object.keys(historyA)
+        .filter(sq => !historyB[sq] || (historyB[sq] && (historyA[sq].piece !== historyB[sq].piece || historyA[sq].color !== historyB[sq].color)))
+        .reduce((acc, sq) => {
+            acc[sq as Square] = historyA[sq as Square];
+            return acc;
+        }, {} as Record<Square, Piece>);
+
+    const added: Record<Square, Piece> = Object.keys(historyB)
+        .filter(sq => !historyA[sq] || (historyA[sq] && (historyA[sq].piece !== historyB[sq].piece || historyA[sq].color !== historyB[sq].color)))
+        .reduce((acc, sq) => {
+            acc[sq as Square] = historyB[sq as Square];
+            return acc;
+        }, {} as Record<Square, Piece>);
+
+    const removedPieces = Object.values(remove).reduce((acc, piece) => {
+        const key = piece.color + piece.piece;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    } , {} as Record<string, number>);
+
+    const addedPieces = Object.values(added).reduce((acc, piece) => {
+        const key = piece.color + piece.piece;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    } , {} as Record<string, number>);
+
+    const intersection: Record<string, number> = {};
+    for (const key in removedPieces) {
+        if (addedPieces[key]) {
+            intersection[key] = Math.min(removedPieces[key], addedPieces[key]);
+        }
+    }
+    
+    const movements: Array<{ from: Square; to: Square }> = [];
+    
+    for (const pieceType in intersection) {
+        const count = intersection[pieceType];
+        
+        // Find squares where this piece type was removed
+        const removedSquares = Object.keys(remove).filter(sq => {
+            const piece = remove[sq as Square];
+            return (piece.color + piece.piece) === pieceType;
+        });
+        
+        // Find squares where this piece type was added
+        const addedSquares = Object.keys(added).filter(sq => {
+            const piece = added[sq as Square];
+            return (piece.color + piece.piece) === pieceType;
+        });
+                
+        // Match removed and added squares for movements
+        for (let i = 0; i < count; i++) {
+            if (removedSquares[i] && addedSquares[i]) {
+                movements.push({
+                    from: removedSquares[i] as Square,
+                    to: addedSquares[i] as Square
+                });
+            }
+        }
+    }
+    
+    return movements;
+}
+
 
 const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: Color): Square | null => {
         const squareSize = pxSize / 8;
@@ -201,7 +267,6 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
                 ctx.beginPath();
                 ctx.arc(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width / 6, 0, 2 * Math.PI);
                 ctx.fill();
-                //ctx.stroke();
             });
 
             props.previewMoves.takeables.forEach((square) => {
@@ -236,9 +301,72 @@ function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
     );
 }
 
-function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: number; chessGame: Chess; colorPerspective: Color }) {
+function ChessBoard({ pxSize, chessGame, colorPerspective = 'w', forceReloadCounter }: { pxSize: number; chessGame: Chess; colorPerspective: Color; forceReloadCounter: number }) {
     const [hoveringPieceOver, setHoveringPieceOver] = useState<Square | null>(null);
     const [delta, setDelta] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [animatingPieces, setAnimatingPieces] = useState<Array<{
+        id: string;
+        piece: Piece;
+        fromRect: { x: number; y: number; width: number; height: number };
+        toRect: { x: number; y: number; width: number; height: number };
+        progress: number;
+        toSquare: Square;
+    }>>([]);
+
+    const animateMovements = (oldPieces: Record<Square, Piece>, movements: Array<{ from: Square; to: Square }>) => {
+        const animationDuration = animatingPieces.length > 0 ? 0 : 200; // ms
+        const animations = movements.map((movement, index) => {
+            const piece = oldPieces[movement.from];
+            if (!piece) return null;
+            
+            const fromRect = mapSquareToPxRect(movement.from, pxSize, colorPerspective);
+            const toRect = mapSquareToPxRect(movement.to, pxSize, colorPerspective);
+            
+            return {
+                id: `animation-${movement.from}-${movement.to}-${Date.now()}-${index}`,
+                piece,
+                fromRect,
+                toRect,
+                progress: 0,
+                toSquare: movement.to
+            };
+        }).filter(Boolean) as Array<{
+            id: string;
+            piece: Piece;
+            fromRect: { x: number; y: number; width: number; height: number };
+            toRect: { x: number; y: number; width: number; height: number };
+            progress: number;
+            toSquare: Square;
+        }>;
+
+        setAnimatingPieces(animations);
+        
+        const startTime = Date.now();
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / animationDuration, 1);
+
+            setAnimatingPieces(current => 
+                current.map(anim => ({
+                    ...anim,
+                    progress: easeInOutCubic(progress)
+                }))
+            );
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                setAnimatingPieces([]);
+            }
+        };
+
+        requestAnimationFrame(animate);
+    };
+
+    const easeInOutCubic = (t: number): number => {
+        return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+    };
 
     function handleDragEnd(event: any) {
         event.activatorEvent.target.style.zIndex = 1;
@@ -253,7 +381,7 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
         const targetSquare = mapPxToSquare(newX, newY, pxSize, colorPerspective);
         
         if (targetSquare && oldSquare !== targetSquare) {
-            movePiece(oldSquare, targetSquare);
+            dropPiece(oldSquare, targetSquare);
         }
     }
 
@@ -296,27 +424,38 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
     }
     
     const [pieces, setPieces] = useState<Record<Square, Piece>>(getPieces(chessGame));
-    const [previousMove, setPreviousMove] = useState<{ from: Square; to: Square } | null>(getPreviousMove(chessGame));
+    
     const [previewMoves, setPreviewMoves] = useState<{ moves: Square[]; takeables: Square[] }>({ moves: [], takeables: [] });
+    // Keeping track of the previous game allows you to compare board state and animate changes
+    const [lastPiecesPosition, setLastPiecesPosition] = useState<Chess | null>(null);
 
-    function movePiece(from: Square, to: Square) {
-        try {
+    const previousMove = useMemo<{ from: Square; to: Square } | null>(() => getPreviousMove(chessGame), [chessGame.fen(), forceReloadCounter]);
+
+    function dropPiece(from: Square, to: Square) {
+        try {   
             chessGame.move({
                 from: from,
                 to: to,
             });
+            setLastPiecesPosition(new Chess(chessGame.fen()));
             setPieces(getPieces(chessGame));
-            setPreviousMove({ from, to });
         } catch {
             console.error("Invalid move");
         }
     }
 
     useEffect(() => {
+        if (lastPiecesPosition) {
+            const movements = getPieceMovements(lastPiecesPosition, chessGame);
+            if (movements.length > 0) {
+                const previousPieces = getPieces(lastPiecesPosition);
+                animateMovements(previousPieces, movements);
+            }
+        }
         setPieces(getPieces(chessGame));
-        setPreviousMove(getPreviousMove(chessGame));
+        setLastPiecesPosition(new Chess(chessGame.fen()));
         setPreviewMoves({ moves: [], takeables: [] });
-    }, [chessGame]);
+    }, [chessGame, forceReloadCounter]);
 
     const pieceImages = {
         "wR": wR, "wN": wN, "wB": wB, "wQ": wQ, "wK": wK, "wP": wP,
@@ -335,24 +474,57 @@ function ChessBoard({ pxSize, chessGame, colorPerspective = 'w' }: { pxSize: num
             highlightHover={hoveringPieceOver}
             previousMove={previousMove}
             previewMoves={previewMoves}
-            children={Object.entries(pieces).map(([square, p]) => {
-            const rect = mapSquareToPxRect(square as Square, pxSize, colorPerspective);
-            const imgKey = (p.color + p.piece.toUpperCase()) as keyof typeof pieceImages;
-            return (
-                <DraggablePiece
-                    key={square}
-                    id={square}
-                    src={pieceImages[imgKey]}
-                    style={{
-                        position: 'absolute',
-                        left: `${rect.x}px`,
-                        top: `${rect.y}px`,
-                        width: `${rect.width}px`,
-                        height: `${rect.height}px`,
-                    }}
-                />
-            );
-        })}
+            children={
+                <>
+                    {Object.entries(pieces).map(([square, p]) => {
+                        // Hide pieces that are currently being animated to this square
+                        const isBeingAnimatedTo = animatingPieces.some(anim => anim.toSquare === square);
+                        if (isBeingAnimatedTo) {
+                            return null;
+                        }
+                        
+                        const rect = mapSquareToPxRect(square as Square, pxSize, colorPerspective);
+                        const imgKey = (p.color + p.piece.toUpperCase()) as keyof typeof pieceImages;
+                        return (
+                            <DraggablePiece
+                                key={square}
+                                id={square}
+                                src={pieceImages[imgKey]}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${rect.x}px`,
+                                    top: `${rect.y}px`,
+                                    width: `${rect.width}px`,
+                                    height: `${rect.height}px`,
+                                }}
+                            />
+                        );
+                    })}
+                    
+                    {animatingPieces.map((animPiece) => {
+                        const currentX = animPiece.fromRect.x + (animPiece.toRect.x - animPiece.fromRect.x) * animPiece.progress;
+                        const currentY = animPiece.fromRect.y + (animPiece.toRect.y - animPiece.fromRect.y) * animPiece.progress;
+                        const imgKey = (animPiece.piece.color + animPiece.piece.piece.toUpperCase()) as keyof typeof pieceImages;
+                        
+                        return (
+                            <img
+                                key={animPiece.id}
+                                src={pieceImages[imgKey]}
+                                alt={`animating-${animPiece.piece.color}${animPiece.piece.piece}`}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${currentX}px`,
+                                    top: `${currentY}px`,
+                                    width: `${animPiece.fromRect.width}px`,
+                                    height: `${animPiece.fromRect.height}px`,
+                                    zIndex: 9999,
+                                    pointerEvents: 'none',
+                                }}
+                            />
+                        );
+                    })}
+                </>
+            }
         />
         
 
