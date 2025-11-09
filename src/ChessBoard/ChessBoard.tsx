@@ -38,13 +38,17 @@ export const getMovesForSquare = (game: Chess, square: Square): Square[] => {
     return moves.map(m => m.to);
 }
 
-// This function can be surpringly quite expensive for large PGNs,
-// it's ok to call it on small puzzles but for full chess games
-// consider storing the last move separately
+// Chess.js library history method is not performant so the only way to get
+// the previous move efficiently is to undo it and redo it
 export const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
-    const history = game.history({ verbose: true });
-    const lastMove = history.at(-1);
-    return lastMove ? { from: lastMove.from, to: lastMove.to } : null;
+    try {
+        const lastMove = game.undo();
+        game.move(lastMove!);
+        return lastMove;
+    } catch {
+        return null;
+    }
+    
 }
 
 export const getPieces = (game: Chess) => chessTypeSquares
@@ -89,10 +93,7 @@ export default function ChessBoardView({ pieces, pxSize, colorPerspective, moveF
         showAvailableMovesForSquare: moveFunctionForDragging && showAvailableMovesForSquare ? showAvailableMovesForSquare : () => []
     });
 
-    const previousMove = useMemo(
-        () => (showPreviousMove ? showPreviousMove() ?? null : null),
-        [showPreviousMove]
-    );
+    const previousMove = showPreviousMove ? showPreviousMove() ?? null : null
 
     return (
         <div style={{ position: 'relative', width: pxSize, height: pxSize }}>
