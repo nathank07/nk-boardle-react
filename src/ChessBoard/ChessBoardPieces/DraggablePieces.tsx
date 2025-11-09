@@ -1,7 +1,7 @@
 import { Chess, PieceSymbol, Color, Square } from 'chess.js';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 import bB from '../../assets/cburnett/bB.svg';
 import bK from '../../assets/cburnett/bK.svg';
@@ -53,51 +53,28 @@ export const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspec
 
 export { mapSquareToPxRect };
 
-export const getMovesForSquare = (game: Chess, square: Square): { moves: Square[], takeables: Square[] } => {
-    const moves = game.moves({ square: square, verbose: true });
-    return moves
-        .map(m => m.to)
-        .map(m => {
-            return game.get(m) ? { move: null, take: m } : { move: m, take: null };
-        })
-        .reduce(
-            (acc, curr) => {
-                if (curr.move) acc.moves.push(curr.move);
-                if (curr.take) acc.takeables.push(curr.take);
-                return acc;
-            },
-            { moves: [] as Square[], takeables: [] as Square[] }
-        );
-}
-
 interface ChessBoardDragHandlers {
+    pieces: Record<Square, Piece>;
     pxSize: number;
     colorPerspective: Color;
-    chessGame: Chess;
-    onMove: (from: Square, to: Square) => void;
+    move: (from: Square, to: Square) => void;
+    showAvailableMovesForSquare?: (square: Square) => Square[];
 }
 
-export const useChessDragHandlers = ({ pxSize, colorPerspective, chessGame, onMove }: ChessBoardDragHandlers) => {
+export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, showAvailableMovesForSquare }: ChessBoardDragHandlers) => {
     const [hoveringPieceOver, setHoveringPieceOver] = useState<Square | null>(null);
-    const [delta, setDelta] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const previousPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
     const [previewMoves, setPreviewMoves] = useState<{ moves: Square[]; takeables: Square[] }>({ moves: [], takeables: [] });
+    const currentDraggedPieceRef = useRef<Square | null>(null);
 
-    const dropPiece = useCallback((from: Square, to: Square) => {
-        try {   
-            chessGame.move({
-                from: from,
-                to: to,
-            });
-            onMove(from, to);
-        } catch {
-            console.error("Invalid move");
-        }
-    }, [chessGame, onMove]);
-
-    const handleDragEnd = useCallback((event: any) => {
+    const handleDragNoMove = useCallback((event: any) => {
         event.activatorEvent.target.style.zIndex = 1;
         setHoveringPieceOver(null);
         setPreviewMoves({ moves: [], takeables: [] });
+        // Reset the position tracking and current dragged piece
+        previousPositionRef.current = { x: 0, y: 0 };
+        currentDraggedPieceRef.current = null;
+        
         if(!event.over) return        
         const {x, y} = event.delta;
         const oldSquare = event.active.id as Square;
@@ -107,9 +84,9 @@ export const useChessDragHandlers = ({ pxSize, colorPerspective, chessGame, onMo
         const targetSquare = mapPxToSquare(newX, newY, pxSize, colorPerspective);
         
         if (targetSquare && oldSquare !== targetSquare) {
-            dropPiece(oldSquare, targetSquare);
+            move(oldSquare, targetSquare);
         }
-    }, [pxSize, colorPerspective, dropPiece]);
+    }, [pxSize, colorPerspective, move]);
 
     const handleDragMove = useCallback((event: any) => {
         if (event.active) {
@@ -118,19 +95,30 @@ export const useChessDragHandlers = ({ pxSize, colorPerspective, chessGame, onMo
 
             // Get current position of dragged piece based on delta
             const { x, y } = event.delta;
-            const { x: oldX, y: oldY } = delta || {};
             const sourceSquare = event.active.id as Square;
             const rect = mapSquareToPxRect(sourceSquare, pxSize, colorPerspective);
             const newX = rect.x + x + rect.width / 2;
             const newY = rect.y + y + rect.width / 2;
 
-            // Update preview moves for the piece being dragged
-            setPreviewMoves(getMovesForSquare(chessGame, sourceSquare));
+            // Only update preview moves when the dragged piece changes
+            if (currentDraggedPieceRef.current !== sourceSquare) {
+                currentDraggedPieceRef.current = sourceSquare;
+                const moves = showAvailableMovesForSquare ? showAvailableMovesForSquare(sourceSquare) : [];
+                // ChessBoardCanvas doesn't check for takeables 
+                // separately, so they need to be extracted out
+                setPreviewMoves({ 
+                    moves: moves.filter(m => !pieces[m]),
+                    takeables: moves.filter(m => pieces[m])
+                });
+            }
 
             // Prevent redraws if still over the same square 
-            const oldSquare = mapPxToSquare(oldX || (rect.x + rect.width / 2), 
-                                            oldY || (rect.y + rect.height / 2), 
-                                            pxSize, colorPerspective);
+            const oldSquare = mapPxToSquare(
+                previousPositionRef.current.x || (rect.x + rect.width / 2), 
+                previousPositionRef.current.y || (rect.y + rect.height / 2), 
+                pxSize, 
+                colorPerspective
+            );
             const targetSquare = mapPxToSquare(newX, newY, pxSize, colorPerspective);
 
             // If the piece is not over a square then you don't need to highlight anything
@@ -141,17 +129,18 @@ export const useChessDragHandlers = ({ pxSize, colorPerspective, chessGame, onMo
 
             // Only update if the square has changed
             if (oldSquare !== targetSquare || hoveringPieceOver === null) {
-                setDelta({ x, y });
+                // Update the ref without causing a re-render
+                previousPositionRef.current = { x: newX, y: newY };
                 setHoveringPieceOver(targetSquare);
             }
         }
-    }, [pxSize, colorPerspective, chessGame, delta, hoveringPieceOver]);
+    }, [pxSize, colorPerspective, showAvailableMovesForSquare]);
 
     return { 
         hoveringPieceOver, 
         previewMoves,  
         handleDragMove,
-        handleDragEnd 
+        handleDragNoMove
     };
 };
 
@@ -202,7 +191,6 @@ export default function DraggablePieces({ pieces, animatingPieces, pxSize, color
                 if (isBeingAnimatedTo) {
                     return null;
                 }
-                
                 const rect = mapSquareToPxRect(square as Square, pxSize, colorPerspective);
                 const imgKey = (p.color + p.piece.toUpperCase()) as keyof typeof pieceImages;
                 return (

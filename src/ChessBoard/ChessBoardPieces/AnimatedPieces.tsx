@@ -1,5 +1,5 @@
 import { Chess, Color, Square } from 'chess.js';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { Piece, getPieces } from '../ChessBoard';
 
 import bB from '../../assets/cburnett/bB.svg';
@@ -33,10 +33,10 @@ const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Col
     };
 };
 
-export const getPieceMovements = (chessGameA: Chess, chessGameB: Chess) => {
-    const historyA = getPieces(chessGameA);
-    const historyB = getPieces(chessGameB);
-    
+export const getPieceMovements = (piecesPosA: Record<Square, Piece>, piecesPosB: Record<Square, Piece>) => {
+    const historyA = piecesPosA;
+    const historyB = piecesPosB;
+
     const remove: Record<Square, Piece> = Object.keys(historyA)
         .filter(sq => !historyB[sq] || (historyB[sq] && (historyA[sq].piece !== historyB[sq].piece || historyA[sq].color !== historyB[sq].color)))
         .reduce((acc, sq) => {
@@ -103,14 +103,15 @@ const easeInOutCubic = (t: number): number => {
 };
 
 interface ChessPieceAnimation {
-    chessGame: Chess;
+    pieces: Record<Square, Piece>;
     pxSize: number;
     colorPerspective: Color;
-    forceReloadCounter: number;
+    suppressAnimations: boolean;
 }
 
 // Custom hook for piece animations with automatic movement detection
-export const useChessPieceAnimations = ({ chessGame, pxSize, colorPerspective, forceReloadCounter }: ChessPieceAnimation) => {
+export const useChessPieceAnimations = ({ pieces, pxSize, colorPerspective, suppressAnimations }: ChessPieceAnimation) => {
+
     const [animatingPieces, setAnimatingPieces] = useState<Array<{
         id: string;
         piece: Piece;
@@ -120,7 +121,7 @@ export const useChessPieceAnimations = ({ chessGame, pxSize, colorPerspective, f
         toSquare: Square;
     }>>([]);
     
-    const [lastPiecesPosition, setLastPiecesPosition] = useState<Chess | null>(null);
+    const [lastPiecesPosition, setLastPiecesPosition] = useState<Record<Square, Piece> | null>(null);
     
     const animateMovements = useCallback((oldPieces: Record<Square, Piece>, movements: Array<{ from: Square; to: Square }>) => {
         const animationDuration = animatingPieces.length > 0 ? 0 : 200; // ms
@@ -174,19 +175,19 @@ export const useChessPieceAnimations = ({ chessGame, pxSize, colorPerspective, f
     }, [animatingPieces, pxSize, colorPerspective]);
 
     // Automatically handle position changes and trigger animations
-    useEffect(() => {
+    // useLayoutEffect needs to be used here, otherwise you will get FOUC
+    useLayoutEffect(() => {
         if (lastPiecesPosition) {
-            const movements = getPieceMovements(lastPiecesPosition, chessGame);
+            const movements = getPieceMovements(lastPiecesPosition, pieces);
             if (movements.length > 0) {
-                const previousPieces = getPieces(lastPiecesPosition);
-                animateMovements(previousPieces, movements);
+                animateMovements(lastPiecesPosition, movements);
             }
         }
-        setLastPiecesPosition(new Chess(chessGame.fen()));
-    }, [chessGame, forceReloadCounter]);
+        setLastPiecesPosition(pieces);
+    }, [pieces, animateMovements]);
 
 
-    return { animatingPieces, setLastPiecesPosition };
+    return suppressAnimations ? [] : animatingPieces;
 };
 
 interface AnimatedPiecesProps {

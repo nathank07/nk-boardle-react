@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import { Chess } from 'chess.js'
-import ChessBoard from './ChessBoard/ChessBoard.tsx'
+import ChessBoard, { getMovesForSquare } from './ChessBoard/ChessBoard.tsx'
+import ChessBoardView, { getPreviousMove, getPieces } from './ChessBoard/ChessBoard.tsx'
+import { Square, Color } from 'chess.js'
 
 async function ChessTest() {
     const chess = new Chess();
@@ -66,25 +68,24 @@ Ng3 95. Nf3 Ne2 96. Nbd2 Ng1 97. Ka4 Rg8 98. Rh5 Nc6 99. Rh6 Na5 100. Rxh7 Nb3
     return chess;
 }
 
+function ChessTest3(chessGame) {
+    if (chessGame.fen() == '8/r5pk/3R4/p1p3PK/Pp6/8/2P5/b7 w - - 9 38') {
+        const chess = new Chess();
+        chess.load("r1bq1rk1/pp4pp/2nbp3/3p4/3Pn3/P2B1N2/1P2NPPP/R1BQR1K1 b - - 0 13");
+        return chess;
+    } else {
+        const chess = new Chess();
+        chess.load("8/r5pk/3R4/p1p3PK/Pp6/8/2P5/b7 w - - 9 38");
+        return chess;
+    }
+}
+
 function App() {
   const [count, setCount] = useState(0)
-  const [chessGame, setChessGame] = useState(null)
-  const [forceReloadCounter, setForceReloadCounter] = useState(0)
+  const [chessGame, setChessGame] = useState(new Chess())
+  const [pieces, setPieces] = useState(getPieces(chessGame));
   const [colorPerspective, setColorPerspective] = useState('w')
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-        if (e.key === 'ArrowLeft') {
-            if (chessGame) {
-                chessGame.undo();
-                setForceReloadCounter((count) => count + 1);
-                setChessGame(chessGame);
-            }
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [chessGame]);
 
   return (
     <>
@@ -100,9 +101,9 @@ function App() {
       <div className="card">
         <button onClick={async () =>  {
             setCount((count) => count + 1)
-            const chess = await ChessTest();
-            setChessGame(chess)
-            console.log(chess.turn())
+            const newChessGame = await ChessTest2();
+            setChessGame(newChessGame);
+            setPieces(getPieces(newChessGame));
         }}>
           count is {count}
         </button>
@@ -113,34 +114,27 @@ function App() {
         </button>
         <button onClick={() => {
             chessGame?.undo();
-            setChessGame(chessGame);
-            setForceReloadCounter((count) => count + 1);
+            setPieces(getPieces(chessGame));
         }}>
             Back
         </button>
+
+        <ChessBoardView
+            pieces={pieces}
+            pxSize={750}
+            colorPerspective={colorPerspective as Color}
+            moveFunctionForDragging={(from: Square, to: Square) => {
+                chessGame.move({ from, to });
+                setPieces(getPieces(chessGame));
+            }}
+            showAvailableMovesForSquare={(squares) => getMovesForSquare(chessGame, squares)}
+            showPreviousMove={() => getPreviousMove(chessGame)}
+        />
+
         <p>
           Edit <code>src/App.jsx</code> and save to test HMR
         </p>
           </div>
-        {chessGame && (
-        <ChessBoard pxSize={750} chessGame={chessGame} colorPerspective={colorPerspective} forceReloadCounter={forceReloadCounter} />
-          )}
-          <input
-        type="text"
-        onKeyDown={e => {
-          if (e.key === 'Enter' && chessGame) {
-            const move = e.target.value;
-            try {
-              chessGame.move(move);
-              setChessGame(chessGame);
-              setForceReloadCounter((count) => count + 1);
-            } catch (error) {
-              console.error('Invalid move:', error);
-            }
-          }
-        }}
-          />
-          
           {/* <Example /> */}
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more

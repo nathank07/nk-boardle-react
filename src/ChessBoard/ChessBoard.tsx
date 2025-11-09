@@ -1,5 +1,5 @@
 import { Chess, Color, Square, PieceSymbol } from 'chess.js';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { DndContext } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
 
@@ -25,13 +25,23 @@ export interface Piece {
 }
 
 interface ChessBoardProps {
-    chessGame: Chess;
+    pieces: Record<Square, Piece>;
     pxSize: number;
     colorPerspective: Color;
-    forceReloadCounter: number;
+    moveFunctionForDragging?: (from: Square, to: Square) => void;
+    showAvailableMovesForSquare?: (square: Square) => Square[];
+    showPreviousMove?: () => { from: Square, to: Square } | null;
 }
 
-const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
+export const getMovesForSquare = (game: Chess, square: Square): Square[] => {
+    const moves = game.moves({ square: square, verbose: true });
+    return moves.map(m => m.to);
+}
+
+// This function can be surpringly quite expensive for large PGNs,
+// it's ok to call it on small puzzles but for full chess games
+// consider storing the last move separately
+export const getPreviousMove = (game: Chess): { from: Square; to: Square } | null => {
     const history = game.history({ verbose: true });
     const lastMove = history.at(-1);
     return lastMove ? { from: lastMove.from, to: lastMove.to } : null;
@@ -55,39 +65,39 @@ export const getPieces = (game: Chess) => chessTypeSquares
         return acc;
     }, {} as Record<Square, Piece>);
 
-export default function ChessBoard({ chessGame, pxSize, colorPerspective, forceReloadCounter }: ChessBoardProps) {
-    // Handle animations
-    const { animatingPieces, setLastPiecesPosition } = useChessPieceAnimations({
-        chessGame: chessGame,
+
+export default function ChessBoardView({ pieces, pxSize, colorPerspective, moveFunctionForDragging, showAvailableMovesForSquare, showPreviousMove }: ChessBoardProps) {
+    const [suppressAnimations, setSuppressAnimations] = useState(false);
+
+    const animatingPieces = useChessPieceAnimations({
+        pieces: pieces,
         pxSize: pxSize,
         colorPerspective: colorPerspective,
-        forceReloadCounter: forceReloadCounter
+        suppressAnimations: suppressAnimations
     });
-
-    const move = () => {
-        setPieces(getPieces(chessGame));
-        setLastPiecesPosition(new Chess(chessGame.fen()));
-    };
 
     // Handle drag interactions  
-    const [pieces, setPieces] = useState<Record<Square, Piece>>(getPieces(chessGame));
-    const { hoveringPieceOver, previewMoves, handleDragMove, handleDragEnd } = useChessDragHandlers({
+    const { hoveringPieceOver, previewMoves, handleDragMove, handleDragNoMove } = useChessDragHandlers({
+        pieces: pieces,
         pxSize,
         colorPerspective,
-        chessGame,
-        onMove: useCallback(move, [chessGame])
+        move: moveFunctionForDragging ? (...args) => {
+            setSuppressAnimations(true);
+            moveFunctionForDragging(...args);
+            setTimeout(() => setSuppressAnimations(false), 250);
+        } : () => {},
+        showAvailableMovesForSquare: moveFunctionForDragging && showAvailableMovesForSquare ? showAvailableMovesForSquare : () => []
     });
 
-    
-    useEffect(move, [chessGame, forceReloadCounter]);
-
-    // Get previous move for highlighting
-    const previousMove = useMemo(() => getPreviousMove(chessGame), [chessGame.fen(), forceReloadCounter]);
+    const previousMove = useMemo(
+        () => (showPreviousMove ? showPreviousMove() ?? null : null),
+        [showPreviousMove]
+    );
 
     return (
         <div style={{ position: 'relative', width: pxSize, height: pxSize }}>
             <DndContext 
-                onDragEnd={handleDragEnd} 
+                onDragEnd={handleDragNoMove} 
                 onDragMove={handleDragMove}
                 modifiers={[snapCenterToCursor]}
             >
