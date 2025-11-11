@@ -160,11 +160,11 @@ function App() {
             pieces={pieces}
             pxSize={750}
             colorPerspective={colorPerspective as Color}
-            moveFunctionForDragging={(from: Square, to: Square, promotion?: PieceSymbol) => {
+            dragToMove={(from: Square, to: Square, promotion?: PieceSymbol) => {
                 chessGame.move(!promotion ? { from, to } : { from, to, promotion });
                 setPieces(getPieces(chessGame));
             }}
-            showAvailableMovesForSquare={(squares) => getMovesForSquare(chessGame, squares)}
+            getLegalMoves={(squares) => getMovesForSquare(chessGame, squares)}
             showPreviousMove={() => getPreviousMove(chessGame)}
         />
 

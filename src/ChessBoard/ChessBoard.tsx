@@ -29,8 +29,9 @@ interface ChessBoardProps {
     pieces: Record<Square, Piece>;
     pxSize: number;
     colorPerspective: Color;
-    moveFunctionForDragging?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
-    showAvailableMovesForSquare?: (square: Square) => Square[];
+    showMoveHints?: boolean;
+    dragToMove?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
+    getLegalMoves?: (square: Square) => Square[];
     showPreviousMove?: () => { from: Square, to: Square } | null;
 }
 
@@ -71,7 +72,15 @@ export const getPieces = (game: Chess) => chessTypeSquares
     }, {} as Record<Square, Piece>);
 
 
-export default function ChessBoardView({ pieces, pxSize, colorPerspective, moveFunctionForDragging, showAvailableMovesForSquare, showPreviousMove }: ChessBoardProps) {
+export default function ChessBoardView(
+    { pieces,
+      pxSize, 
+      colorPerspective, 
+      showMoveHints = true, 
+      dragToMove, 
+      getLegalMoves, 
+      showPreviousMove }: ChessBoardProps
+    ) {
     const [suppressAnimations, setSuppressAnimations] = useState(false);
     const [promotionView, setPromotionView] = useState<{ from: Square; to: Square } | null>(null);
 
@@ -87,15 +96,19 @@ export default function ChessBoardView({ pieces, pxSize, colorPerspective, moveF
         pieces: pieces,
         pxSize,
         colorPerspective,
-        move: moveFunctionForDragging ? (...args) => {
+        move: dragToMove ? (...args) => {
             setSuppressAnimations(true);
             setTimeout(() => setSuppressAnimations(false), 250);
-            moveFunctionForDragging(...args);
+            dragToMove(...args);
         } : () => {},
         getPromotion: (from: Square, to: Square) => {
-            setPromotionView({ from, to });
+            if (!getLegalMoves || getLegalMoves(from).some(sq => sq === to)) {
+                setPromotionView({ from, to });
+            }
         },
-        showAvailableMovesForSquare: moveFunctionForDragging && showAvailableMovesForSquare ? showAvailableMovesForSquare : () => []
+        showAvailableMovesForSquare: !(showMoveHints && dragToMove && getLegalMoves) ? () => [] : (
+            getLegalMoves
+        )
     });
 
     const previousMove = showPreviousMove ? showPreviousMove() ?? null : null
@@ -126,12 +139,12 @@ export default function ChessBoardView({ pieces, pxSize, colorPerspective, moveF
                     />
                 </DroppableChessCanvasBg>
             </DndContext>
-            {promotionView && moveFunctionForDragging && 
+            {promotionView && dragToMove && 
             <PromotionView 
                 color={colorPerspective} 
                 pxSize={pxSize} 
                 moveWithPromotion={(piece) => {
-                    moveFunctionForDragging(promotionView.from, promotionView.to, piece);
+                    dragToMove(promotionView.from, promotionView.to, piece);
                     setPromotionView(null);
                 }} 
                 onClick={() => setPromotionView(null)}
