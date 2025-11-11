@@ -89,8 +89,8 @@ export default function ChessBoardView({ pieces, pxSize, colorPerspective, moveF
         colorPerspective,
         move: moveFunctionForDragging ? (...args) => {
             setSuppressAnimations(true);
-            moveFunctionForDragging(...args);
             setTimeout(() => setSuppressAnimations(false), 250);
+            moveFunctionForDragging(...args);
         } : () => {},
         getPromotion: (from: Square, to: Square) => {
             setPromotionView({ from, to });
