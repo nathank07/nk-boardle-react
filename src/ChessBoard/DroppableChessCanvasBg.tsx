@@ -78,8 +78,13 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
 
         // Show squares piece can move to
         if (props.previewMoves) {
+            // These need to be sets as chess.js and possibly 
+            // other libraries return duplicates for promotions
+            const moves = new Set(props.previewMoves.moves);
+            const takeables = new Set(props.previewMoves.takeables);
+
             // Moves that are not captures
-            props.previewMoves.moves.forEach((square) => {
+            moves.forEach((square) => {
                 if (square === props.highlightHover) return;
                 const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
                 ctx.fillStyle = 'rgba(0, 180, 235, 0.3)';
@@ -91,7 +96,7 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
             });
 
             // Moves that have a piece that can be captured
-            props.previewMoves.takeables.forEach((square) => {
+            takeables.forEach((square) => {
                 if (square === props.highlightHover) return;
                 const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
@@ -109,7 +114,6 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
                     position: 'relative',
                     width: `${props.pxSize}px`,
                     height: `${props.pxSize}px`,
-                    // border: isOver ? '4px solid blue' : '4px solid transparent',
             }}>
                 <canvas
                     className="chessboard"

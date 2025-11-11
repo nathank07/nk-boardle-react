@@ -1,24 +1,8 @@
 import { Chess, Color, Square } from 'chess.js';
-import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Piece, getPieces } from '../ChessBoard';
+import pieceImages from './PieceImages';
 
-import bB from '../../assets/cburnett/bB.svg';
-import bK from '../../assets/cburnett/bK.svg';
-import bN from '../../assets/cburnett/bN.svg';
-import bP from '../../assets/cburnett/bP.svg';
-import bQ from '../../assets/cburnett/bQ.svg';
-import bR from '../../assets/cburnett/bR.svg';
-import wB from '../../assets/cburnett/wB.svg';
-import wK from '../../assets/cburnett/wK.svg';
-import wN from '../../assets/cburnett/wN.svg';
-import wP from '../../assets/cburnett/wP.svg';
-import wQ from '../../assets/cburnett/wQ.svg';
-import wR from '../../assets/cburnett/wR.svg';
-
-const pieceImages = {
-    "wR": wR, "wN": wN, "wB": wB, "wQ": wQ, "wK": wK, "wP": wP,
-    "bR": bR, "bN": bN, "bB": bB, "bQ": bQ, "bK": bK, "bP": bP,
-};
 
 const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Color) => {
     const squareSize = pxSize / 8;
@@ -37,66 +21,157 @@ export const getPieceMovements = (piecesPosA: Record<Square, Piece>, piecesPosB:
     const historyA = piecesPosA;
     const historyB = piecesPosB;
 
-    const remove: Record<Square, Piece> = Object.keys(historyA)
+    const removedSquaresToPieces: Record<Square, Piece> = Object.keys(historyA)
         .filter(sq => !historyB[sq] || (historyB[sq] && (historyA[sq].piece !== historyB[sq].piece || historyA[sq].color !== historyB[sq].color)))
         .reduce((acc, sq) => {
             acc[sq as Square] = historyA[sq as Square];
             return acc;
         }, {} as Record<Square, Piece>);
 
-    const added: Record<Square, Piece> = Object.keys(historyB)
+    const addedSquaresToPieces: Record<Square, Piece> = Object.keys(historyB)
         .filter(sq => !historyA[sq] || (historyA[sq] && (historyA[sq].piece !== historyB[sq].piece || historyA[sq].color !== historyB[sq].color)))
         .reduce((acc, sq) => {
             acc[sq as Square] = historyB[sq as Square];
             return acc;
         }, {} as Record<Square, Piece>);
 
-    const removedPieces = Object.values(remove).reduce((acc, piece) => {
+    const removedPiecesCounter = Object.values(removedSquaresToPieces).reduce((acc, piece) => {
         const key = piece.color + piece.piece;
         acc[key] = (acc[key] || 0) + 1;
         return acc;
     } , {} as Record<string, number>);
 
-    const addedPieces = Object.values(added).reduce((acc, piece) => {
+    const addedPiecesCounter = Object.values(addedSquaresToPieces).reduce((acc, piece) => {
         const key = piece.color + piece.piece;
         acc[key] = (acc[key] || 0) + 1;
         return acc;
     } , {} as Record<string, number>);
 
+    // Pieces that were removed from a square and found elsewhere
     const intersection: Record<string, number> = {};
-    for (const key in removedPieces) {
-        if (addedPieces[key]) {
-            intersection[key] = Math.min(removedPieces[key], addedPieces[key]);
+    for (const pieceStr in removedPiecesCounter) {
+        if (addedPiecesCounter[pieceStr]) {
+            intersection[pieceStr] = Math.min(removedPiecesCounter[pieceStr], addedPiecesCounter[pieceStr]);
         }
     }
-    
+
+    // Pieces where a new non pawn piece was found but a pawn was removed
+    const pawnPromotions: Record<string, number> = {};
+    for (const removedPieceStr in removedPiecesCounter) {
+        if (removedPieceStr.endsWith('p')) {
+            for (const addedPieceStr in addedPiecesCounter) {
+                const intersect = intersection[addedPieceStr] || 0;
+                if (addedPieceStr[0] != removedPieceStr[0]) continue;
+                if (addedPieceStr.endsWith('p')) continue;
+                if (addedPiecesCounter[addedPieceStr] <= intersect) continue;
+                pawnPromotions[removedPieceStr] = Math.min(removedPiecesCounter[removedPieceStr], addedPiecesCounter[addedPieceStr] - intersect);
+            }
+        }
+    }
+
+    // Pieces where a pawn was added but a non pawn piece was removed
+    const pawnDemotions: Record<string, number> = {};
+    for (const addedPieceStr in addedPiecesCounter) {
+        if (addedPieceStr.endsWith('p')) {
+            for (const removedPieceStr in removedPiecesCounter) {
+                const intersect = intersection[removedPieceStr] || 0;
+                if (addedPieceStr[0] != removedPieceStr[0]) continue;
+                if (removedPieceStr.endsWith('p')) continue;
+                if (removedPiecesCounter[removedPieceStr] <= intersect) continue;
+                pawnDemotions[addedPieceStr] = removedPiecesCounter[removedPieceStr] - intersect;
+            }
+        }
+    }
+
     const movements: Array<{ from: Square; to: Square }> = [];
     
-    for (const pieceType in intersection) {
-        const count = intersection[pieceType];
-        
-        const removedSquares = Object.keys(remove).filter(sq => {
-            const piece = remove[sq as Square];
-            return (piece.color + piece.piece) === pieceType;
+    for (const pieceStr in intersection) {
+        const count = intersection[pieceStr];
+
+        const removedSquares = Object.keys(removedSquaresToPieces).filter(sq => {
+            const piece = removedSquaresToPieces[sq as Square];
+            return (piece.color + piece.piece) === pieceStr;
         });
         
-        const addedSquares = Object.keys(added).filter(sq => {
-            const piece = added[sq as Square];
-            return (piece.color + piece.piece) === pieceType;
+        const addedSquares = Object.keys(addedSquaresToPieces).filter(sq => {
+            const piece = addedSquaresToPieces[sq as Square];
+            return (piece.color + piece.piece) === pieceStr;
         });
-                
+
         for (let i = 0; i < count; i++) {
             if (removedSquares[i] && addedSquares[i]) {
+                if (addedSquares[i]) {
+                    const removedSquare = removedSquares[i] as Square;
+                    const addedSquare = addedSquares[i] as Square;
+                    movements.push({
+                        from: removedSquare,
+                        to: addedSquare
+                    });
+                    delete removedSquaresToPieces[removedSquare];
+                    delete addedSquaresToPieces[addedSquare];
+                }
+            }
+        }
+
+    }
+
+    for (const pieceStr in pawnPromotions) {
+        const count = pawnPromotions[pieceStr];
+
+        const removedSquares = Object.keys(removedSquaresToPieces).filter(sq => {
+            const piece = removedSquaresToPieces[sq as Square];
+            const correctRank = sq[1] === (pieceStr[0] === 'w' ? '7' : '2');
+            return correctRank && (piece.color) === pieceStr[0];
+        });
+
+        const addedSquares = Object.keys(addedSquaresToPieces).filter(sq => {
+            const piece = addedSquaresToPieces[sq as Square];
+            const correctRank = sq[1] === (pieceStr[0] === 'w' ? '8' : '1');
+            return correctRank && (piece.color) === pieceStr[0];
+        });
+
+        for (let i = 0; i < count; i++) {
+            if (removedSquares[i] && addedSquares[i]) {
+                const removedSquare = removedSquares[i] as Square;
+                const addedSquare = addedSquares[i] as Square;
                 movements.push({
-                    from: removedSquares[i] as Square,
-                    to: addedSquares[i] as Square
+                    from: removedSquare,
+                    to: addedSquare
                 });
             }
         }
     }
-    
+
+    for (const pieceStr in pawnDemotions) {
+        const count = pawnDemotions[pieceStr];
+        
+        const removedSquares = Object.keys(removedSquaresToPieces).filter(sq => {
+            const piece = removedSquaresToPieces[sq as Square];
+            const correctRank = sq[1] === (pieceStr[0] === 'w' ? '8' : '1');
+            return correctRank && (piece.color) === pieceStr[0];
+        });
+        
+        const addedSquares = Object.keys(addedSquaresToPieces).filter(sq => {
+            const piece = addedSquaresToPieces[sq as Square];
+            const correctRank = sq[1] === (pieceStr[0] === 'w' ? '7' : '2');
+            return correctRank && (piece.color) === pieceStr[0];
+        });
+
+        for (let i = 0; i < count; i++) {
+            if (removedSquares[i] && addedSquares[i]) {
+                const removedSquare = removedSquares[i] as Square;
+                const addedSquare = addedSquares[i] as Square;
+                movements.push({
+                    from: removedSquare,
+                    to: addedSquare
+                });
+            }
+        }
+    }
+
     return movements;
 }
+
 
 const easeInOutCubic = (t: number): number => {
     return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
@@ -122,6 +197,11 @@ export const useChessPieceAnimations = ({ pieces, pxSize, colorPerspective, supp
     }>>([]);
     
     const [lastPiecesPosition, setLastPiecesPosition] = useState<Record<Square, Piece> | null>(null);
+
+    const movements = useMemo(
+        () => lastPiecesPosition ? getPieceMovements(lastPiecesPosition, pieces) : [],
+        [lastPiecesPosition, pieces]
+    );
     
     const animateMovements = useCallback((oldPieces: Record<Square, Piece>, movements: Array<{ from: Square; to: Square }>) => {
         const animationDuration = animatingPieces.length > 0 ? 0 : 200; // ms
@@ -178,7 +258,6 @@ export const useChessPieceAnimations = ({ pieces, pxSize, colorPerspective, supp
     // useLayoutEffect needs to be used here, otherwise you will get FOUC
     useLayoutEffect(() => {
         if (lastPiecesPosition) {
-            const movements = getPieceMovements(lastPiecesPosition, pieces);
             if (movements.length > 0) {
                 animateMovements(lastPiecesPosition, movements);
             }

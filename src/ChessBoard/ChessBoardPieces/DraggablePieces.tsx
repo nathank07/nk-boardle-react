@@ -2,24 +2,7 @@ import { Chess, PieceSymbol, Color, Square } from 'chess.js';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useCallback, useRef } from 'react';
-
-import bB from '../../assets/cburnett/bB.svg';
-import bK from '../../assets/cburnett/bK.svg';
-import bN from '../../assets/cburnett/bN.svg';
-import bP from '../../assets/cburnett/bP.svg';
-import bQ from '../../assets/cburnett/bQ.svg';
-import bR from '../../assets/cburnett/bR.svg';
-import wB from '../../assets/cburnett/wB.svg';
-import wK from '../../assets/cburnett/wK.svg';
-import wN from '../../assets/cburnett/wN.svg';
-import wP from '../../assets/cburnett/wP.svg';
-import wQ from '../../assets/cburnett/wQ.svg';
-import wR from '../../assets/cburnett/wR.svg';
-
-const pieceImages = {
-    "wR": wR, "wN": wN, "wB": wB, "wQ": wQ, "wK": wK, "wP": wP,
-    "bR": bR, "bN": bN, "bB": bB, "bQ": bQ, "bK": bK, "bP": bP,
-};
+import pieceImages from './PieceImages';
 
 interface Piece {
     piece: PieceSymbol;
@@ -58,16 +41,18 @@ interface ChessBoardDragHandlers {
     pxSize: number;
     colorPerspective: Color;
     move: (from: Square, to: Square) => void;
+    getPromotion: (from: Square, to: Square) => void;
     showAvailableMovesForSquare?: (square: Square) => Square[];
 }
 
-export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, showAvailableMovesForSquare }: ChessBoardDragHandlers) => {
+export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, getPromotion, showAvailableMovesForSquare }: ChessBoardDragHandlers) => {
     const [hoveringPieceOver, setHoveringPieceOver] = useState<Square | null>(null);
     const previousPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
     const [previewMoves, setPreviewMoves] = useState<{ moves: Square[]; takeables: Square[] }>({ moves: [], takeables: [] });
     const currentDraggedPieceRef = useRef<Square | null>(null);
+    const promotionSquares = ['a8', 'b8', 'c8', 'd8', 'e8', 'f8', 'g8', 'h8', 'a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'h1'];
 
-    const handleDragNoMove = useCallback((event: any) => {
+    const handleDragDrop = useCallback((event: any) => {
         event.activatorEvent.target.style.zIndex = 1;
         setHoveringPieceOver(null);
         setPreviewMoves({ moves: [], takeables: [] });
@@ -84,7 +69,12 @@ export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, s
         const targetSquare = mapPxToSquare(newX, newY, pxSize, colorPerspective);
         
         if (targetSquare && oldSquare !== targetSquare) {
-            move(oldSquare, targetSquare);
+            if (promotionSquares.includes(targetSquare) && pieces[oldSquare].piece === 'p') {
+                getPromotion(oldSquare, targetSquare);
+                return;
+            } else {
+                move(oldSquare, targetSquare);
+            }
         }
     }, [pxSize, colorPerspective, move]);
 
@@ -140,7 +130,7 @@ export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, s
         hoveringPieceOver, 
         previewMoves,  
         handleDragMove,
-        handleDragNoMove
+        handleDragDrop,
     };
 };
 

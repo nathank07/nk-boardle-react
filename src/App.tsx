@@ -5,9 +5,9 @@ import './App.css'
 import { Chess } from 'chess.js'
 import ChessBoard, { getMovesForSquare } from './ChessBoard/ChessBoard.tsx'
 import ChessBoardView, { getPreviousMove, getPieces } from './ChessBoard/ChessBoard.tsx'
-import { Square, Color } from 'chess.js'
+import { Square, Color, PieceSymbol } from 'chess.js'
 
-async function ChessTest() {
+async function ChessTest(_) {
     const chess = new Chess();
     const puzzle = await fetch('/api/new-puzzle')
     const puzzleData = await puzzle.json()
@@ -16,7 +16,7 @@ async function ChessTest() {
     return chess;
 }
 
-function ChessTest2() {
+function ChessTest2(_) {
     const chess = new Chess();
     const pgn = `
     [Event "FIDE record - The longest game ever played"]
@@ -80,6 +80,43 @@ function ChessTest3(chessGame) {
     }
 }
 
+function ChessTest4(chessGame) {
+    if (chessGame.fen() == '4Q3/8/8/8/8/8/2k5/K7 w - - 0 1') {
+        const chess = new Chess();
+        chess.load("8/4P3/8/8/8/8/2k5/K7 w - - 0 1");
+        return chess;
+    } else {
+        const chess = new Chess();
+        chess.load("4Q3/8/8/8/8/8/2k5/K7 w - - 0 1");
+        return chess;
+    }
+}
+
+function ChessTest5(chessGame) {
+    if (chessGame.fen() == '8/7P/8/8/8/8/2k5/K7 w - - 0 1') {
+        const chess = new Chess();
+        chess.load("R7/8/8/8/8/8/2k5/K7 w - - 0 1");
+        return chess;
+    } else {
+        const chess = new Chess();
+        chess.load("8/7P/8/8/8/8/2k5/K7 w - - 0 1");
+        return chess;
+    }
+}
+
+function ChessTest6(chessGame) {
+    if (chessGame.fen() == 'rnbqkb1r/ppppp1Pp/5n2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1') {
+        const chess = new Chess();
+        chess.load("rnbqkb1Q/ppppp2p/5n2/8/8/8/PPPP1PPP/RNBQKBNR w KQq - 0 1");
+        return chess;
+    }
+    else {
+        const chess = new Chess();
+        chess.load("rnbqkb1r/ppppp1Pp/5n2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1");
+        return chess;
+    }
+}
+
 function App() {
   const [count, setCount] = useState(0)
   const [chessGame, setChessGame] = useState(new Chess())
@@ -101,7 +138,7 @@ function App() {
       <div className="card">
         <button onClick={async () =>  {
             setCount((count) => count + 1)
-            const newChessGame = await ChessTest2();
+            const newChessGame = await ChessTest(chessGame);
             setChessGame(newChessGame);
             setPieces(getPieces(newChessGame));
         }}>
@@ -123,8 +160,8 @@ function App() {
             pieces={pieces}
             pxSize={750}
             colorPerspective={colorPerspective as Color}
-            moveFunctionForDragging={(from: Square, to: Square) => {
-                chessGame.move({ from, to });
+            moveFunctionForDragging={(from: Square, to: Square, promotion?: PieceSymbol) => {
+                chessGame.move(!promotion ? { from, to } : { from, to, promotion });
                 setPieces(getPieces(chessGame));
             }}
             showAvailableMovesForSquare={(squares) => getMovesForSquare(chessGame, squares)}
