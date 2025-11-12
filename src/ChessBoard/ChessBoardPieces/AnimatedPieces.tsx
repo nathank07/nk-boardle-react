@@ -1,21 +1,8 @@
 import { Chess, Color, Square } from 'chess.js';
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Piece, getPieces } from '../ChessBoard';
+import { mapSquareToPxRect } from '../DroppableChessCanvasBg';
 import pieceImages from './PieceImages';
-
-
-const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Color) => {
-    const squareSize = pxSize / 8;
-    const col = colorPerspective === 'b' ? 7 - (square.charCodeAt(0) - 97) : square.charCodeAt(0) - 97;
-    const row = colorPerspective === 'b' ? parseInt(square[1]) - 1 : 8 - parseInt(square[1]);
-
-    return {
-        x: col * squareSize,
-        y: row * squareSize,
-        width: squareSize,
-        height: squareSize,
-    };
-};
 
 export const getPieceMovements = (piecesPosA: Record<Square, Piece>, piecesPosB: Record<Square, Piece>) => {
     const historyA = piecesPosA;

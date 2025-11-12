@@ -2,39 +2,13 @@ import { Chess, PieceSymbol, Color, Square } from 'chess.js';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useCallback, useRef } from 'react';
+import { mapPxToSquare, mapSquareToPxRect } from '../DroppableChessCanvasBg';
 import pieceImages from './PieceImages';
 
 interface Piece {
     piece: PieceSymbol;
     color: Color;
 }
-
-const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Color) => {
-    const squareSize = pxSize / 8;
-    const col = colorPerspective === 'b' ? 7 - (square.charCodeAt(0) - 97) : square.charCodeAt(0) - 97;
-    const row = colorPerspective === 'b' ? parseInt(square[1]) - 1 : 8 - parseInt(square[1]);
-
-    return {
-        x: col * squareSize,
-        y: row * squareSize,
-        width: squareSize,
-        height: squareSize,
-    };
-};
-
-export const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: Color): Square | null => {
-    const squareSize = pxSize / 8;
-    const col = Math.floor(x / squareSize);
-    const row = Math.floor(y / squareSize);
-    const mappedCol = colorPerspective === 'b' ? 7 - col : col;
-    const mappedRow = colorPerspective === 'b' ? row : 7 - row;
-    if (mappedCol < 0 || mappedCol > 7 || mappedRow < 0 || mappedRow > 7) {
-        return null;
-    }
-    return String.fromCharCode(97 + mappedCol) + (mappedRow + 1) as Square;
-};
-
-export { mapSquareToPxRect };
 
 interface ChessBoardDragHandlers {
     pieces: Record<Square, Piece>;
@@ -128,14 +102,15 @@ export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, g
 
     return { 
         hoveringPieceOver, 
-        previewMoves,  
+        previewMoves,
+        currentDraggedPieceRef,
         handleDragMove,
         handleDragDrop,
     };
 };
 
 function DraggablePiece({id, src, style}: {id: string; src: string; style?: React.CSSProperties}) {
-    const {attributes, listeners, setNodeRef, transform} = useDraggable({
+    const {attributes, listeners, setNodeRef, transform, isDragging} = useDraggable({
         id: id,
         data: { square: id }
     });
@@ -143,6 +118,7 @@ function DraggablePiece({id, src, style}: {id: string; src: string; style?: Reac
     const pieceStyle: React.CSSProperties = {
         transform: CSS.Translate.toString(transform),
         ...style,
+        cursor: isDragging ? 'grabbing' : 'grab',
         zIndex: 1,
     };
     

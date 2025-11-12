@@ -3,7 +3,7 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { chessTypeSquares } from '../ChessBoard/ChessBoard';
 
-const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Color) => {
+export const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Color) => {
     const squareSize = pxSize / 8;
     const col = colorPerspective === 'b' ? 7 - (square.charCodeAt(0) - 97) : square.charCodeAt(0) - 97;
     const row = colorPerspective === 'b' ? parseInt(square[1]) - 1 : 8 - parseInt(square[1]);
@@ -16,11 +16,23 @@ const mapSquareToPxRect = (square: Square, pxSize: number, colorPerspective: Col
     };
 };
 
+export const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspective: Color): Square | null => {
+    const squareSize = pxSize / 8;
+    const col = Math.floor(x / squareSize);
+    const row = Math.floor(y / squareSize);
+    const mappedCol = colorPerspective === 'b' ? 7 - col : col;
+    const mappedRow = colorPerspective === 'b' ? row : 7 - row;
+    if (mappedCol < 0 || mappedCol > 7 || mappedRow < 0 || mappedRow > 7) {
+        return null;
+    }
+    return String.fromCharCode(97 + mappedCol) + (mappedRow + 1) as Square;
+};
 
 interface DroppableChessCanvasBgProps {
     pxSize: number;
     colorPerspective: Color;
     highlightHover: Square | null;
+    draggingFromSquare: Square | null;
     previousMove: { from: Square; to: Square } | null;
     previewMoves: { moves: Square[]; takeables: Square[] } | null;
     children: React.ReactNode;
@@ -56,6 +68,16 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
                 ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
             }
         });
+
+        // If the user is dragging a piece and the api user wants 
+        // to highlight the original square they're moving from
+        if (props.draggingFromSquare) {
+            const rect = mapSquareToPxRect(props.draggingFromSquare, props.pxSize, props.colorPerspective);
+            ctx.fillStyle = 'rgba(0, 180, 235, 0.3)';
+            ctx.strokeStyle = 'rgba(0, 180, 235, 0.8)';
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        }
 
         // Show previous move
         if (props.previousMove) {
@@ -105,7 +127,7 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
                 ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
             });
         }        
-    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves]);
+    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves, props.draggingFromSquare]);
 
     return (
             <div

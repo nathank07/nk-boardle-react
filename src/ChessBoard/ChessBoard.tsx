@@ -1,5 +1,5 @@
 import { Chess, Color, Square, PieceSymbol } from 'chess.js';
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { DndContext } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
 
@@ -84,6 +84,10 @@ export default function ChessBoardView(
     const [suppressAnimations, setSuppressAnimations] = useState(false);
     const [promotionView, setPromotionView] = useState<{ from: Square; to: Square } | null>(null);
 
+    useEffect(() => {
+        setPromotionView(null);
+    }, [pieces])
+
     const animatingPieces = useChessPieceAnimations({
         pieces: pieces,
         pxSize: pxSize,
@@ -92,7 +96,7 @@ export default function ChessBoardView(
     });
 
     // Handle drag interactions  
-    const { hoveringPieceOver, previewMoves, handleDragMove, handleDragDrop } = useChessDragHandlers({
+    const { hoveringPieceOver, previewMoves, currentDraggedPieceRef, handleDragMove, handleDragDrop } = useChessDragHandlers({
         pieces: pieces,
         pxSize,
         colorPerspective,
@@ -124,6 +128,7 @@ export default function ChessBoardView(
                     pxSize={pxSize}
                     colorPerspective={colorPerspective}
                     highlightHover={hoveringPieceOver}
+                    draggingFromSquare={currentDraggedPieceRef.current}
                     previousMove={previousMove}
                     previewMoves={previewMoves}
                 >
@@ -146,7 +151,8 @@ export default function ChessBoardView(
                 moveWithPromotion={(piece) => {
                     dragToMove(promotionView.from, promotionView.to, piece);
                     setPromotionView(null);
-                }} 
+                }}
+                startAtSquare={promotionView.to}
                 onClick={() => setPromotionView(null)}
             />}
         </div>
