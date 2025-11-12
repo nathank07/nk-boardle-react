@@ -33,6 +33,7 @@ interface DroppableChessCanvasBgProps {
     colorPerspective: Color;
     highlightHover: Square | null;
     draggingFromSquare: Square | null;
+    squareInCheck: Square | null;
     previousMove: { from: Square; to: Square } | null;
     previewMoves: { moves: Square[]; takeables: Square[] } | null;
     children: React.ReactNode;
@@ -126,8 +127,17 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
                 ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
                 ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
             });
-        }        
-    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves, props.draggingFromSquare]);
+        }
+
+        // Show check highlight
+        if (props.squareInCheck) {
+            const rect = mapSquareToPxRect(props.squareInCheck, props.pxSize, props.colorPerspective);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        }
+    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves, props.draggingFromSquare, props.squareInCheck]);
 
     return (
             <div

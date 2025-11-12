@@ -33,6 +33,7 @@ interface ChessBoardProps {
     dragToMove?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
     getLegalMoves?: (square: Square) => Square[];
     showPreviousMove?: () => { from: Square, to: Square } | null;
+    showCheck?: () => Square | null;
 }
 
 export const getMovesForSquare = (game: Chess, square: Square): Square[] => {
@@ -77,6 +78,7 @@ export default function ChessBoardView(
       pxSize, 
       colorPerspective, 
       showMoveHints = true, 
+      showCheck,
       dragToMove, 
       getLegalMoves, 
       showPreviousMove }: ChessBoardProps
@@ -115,7 +117,8 @@ export default function ChessBoardView(
         )
     });
 
-    const previousMove = showPreviousMove ? showPreviousMove() ?? null : null
+    const previousMove = showPreviousMove ? showPreviousMove() ?? null : null;
+    const squareInCheck = showCheck ? showCheck() ?? null : null;
 
     return (
         <div style={{ position: 'relative', width: pxSize, height: pxSize }}>
@@ -129,6 +132,7 @@ export default function ChessBoardView(
                     colorPerspective={colorPerspective}
                     highlightHover={hoveringPieceOver}
                     draggingFromSquare={currentDraggedPieceRef.current}
+                    squareInCheck={squareInCheck}
                     previousMove={previousMove}
                     previewMoves={previewMoves}
                 >

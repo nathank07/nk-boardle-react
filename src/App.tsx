@@ -166,6 +166,9 @@ function App() {
             }}
             getLegalMoves={(squares) => getMovesForSquare(chessGame, squares)}
             showPreviousMove={() => getPreviousMove(chessGame)}
+            showCheck={() => {
+                return chessGame.inCheck() ? chessGame.findPiece({ color: chessGame.turn(), type: "k"})[0] : null;
+            }}
         />
 
         <p>
