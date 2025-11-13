@@ -1,6 +1,6 @@
 import { Chess, Color, Square, PieceSymbol } from 'chess.js';
 import { useState, useEffect } from 'react';
-import { DndContext, Modifier } from '@dnd-kit/core';
+import { DndContext, Modifier, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { restrictToFirstScrollableAncestor, snapCenterToCursor } from '@dnd-kit/modifiers';
 
 import DroppableChessCanvasBg from './DroppableChessCanvasBg';
@@ -120,6 +120,15 @@ export default function ChessBoardView(
     const previousMove = showPreviousMove ? showPreviousMove() ?? null : null;
     const squareInCheck = showCheck ? showCheck() ?? null : null;
 
+    const sensors = useSensors(
+        useSensor(MouseSensor),
+        useSensor(TouchSensor),
+        // A keyboard sensor would be nice, but dnd-kit's implementation
+        // has scrolling effects that don't really work well with a chessboard
+        // and there's no real easy fix - 
+        // described in https://github.com/clauderic/dnd-kit/issues/1152
+    );
+
     return (
         <div style={{ position: 'relative', width: pxSize, height: pxSize }}>
             <DndContext 
@@ -127,6 +136,7 @@ export default function ChessBoardView(
                 onDragMove={handleDragMove}
                 modifiers={[snapCenterToCursor, restrictPiecesToBoard]}
                 autoScroll={false}
+                sensors={sensors}
             >
                 <DroppableChessCanvasBg
                     pxSize={pxSize}
@@ -183,7 +193,7 @@ const restrictPiecesToBoard: Modifier = ({
         top:   draggingNodeRect.top - containerNodeRect.top,
         left:  draggingNodeRect.left - containerNodeRect.left,
     }
-    
+
     const relativePos = {
         top:   originalPos.top + transform.y,
         left:  originalPos.left + transform.x,
