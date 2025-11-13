@@ -3,9 +3,11 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import { Chess } from 'chess.js'
-import ChessBoard, { getMovesForSquare } from './ChessBoard/ChessBoard.tsx'
-import ChessBoardView, { getPreviousMove, getPieces } from './ChessBoard/ChessBoard.tsx'
+import ChessBoardView, { getMovesForSquare, getPreviousMove, getPieces } from './ChessBoard/ChessBoard.tsx'
 import { Square, Color, PieceSymbol } from 'chess.js'
+import useSound from 'use-sound';
+import move from './assets/standard/Move.mp3';
+import capture from './assets/standard/Capture.mp3';
 
 async function ChessTest(_) {
     const chess = new Chess();
@@ -122,7 +124,8 @@ function App() {
   const [chessGame, setChessGame] = useState(new Chess())
   const [pieces, setPieces] = useState(getPieces(chessGame));
   const [colorPerspective, setColorPerspective] = useState('w')
-
+  const [playMoveSound] = useSound(move);
+  const [playCaptureSound] = useSound(capture);
 
   return (
     <>
@@ -161,7 +164,9 @@ function App() {
             pxSize={750}
             colorPerspective={colorPerspective as Color}
             dragToMove={(from: Square, to: Square, promotion?: PieceSymbol) => {
+                const isCapture = chessGame.get(to);
                 chessGame.move(!promotion ? { from, to } : { from, to, promotion });
+                (isCapture ? playCaptureSound : playMoveSound)();
                 setPieces(getPieces(chessGame));
             }}
             getLegalMoves={(squares) => getMovesForSquare(chessGame, squares)}

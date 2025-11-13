@@ -1,7 +1,7 @@
 import { Chess, Color, Square, PieceSymbol } from 'chess.js';
 import { useState, useEffect } from 'react';
-import { DndContext } from '@dnd-kit/core';
-import { snapCenterToCursor } from '@dnd-kit/modifiers';
+import { DndContext, Modifier } from '@dnd-kit/core';
+import { restrictToFirstScrollableAncestor, snapCenterToCursor } from '@dnd-kit/modifiers';
 
 import DroppableChessCanvasBg from './DroppableChessCanvasBg';
 import { useChessPieceAnimations } from './ChessBoardPieces/AnimatedPieces';
@@ -125,7 +125,8 @@ export default function ChessBoardView(
             <DndContext 
                 onDragEnd={handleDragDrop} 
                 onDragMove={handleDragMove}
-                modifiers={[snapCenterToCursor]}
+                modifiers={[snapCenterToCursor, restrictPiecesToBoard]}
+                autoScroll={false}
             >
                 <DroppableChessCanvasBg
                     pxSize={pxSize}
@@ -162,3 +163,53 @@ export default function ChessBoardView(
         </div>
     );
 }
+
+// RestrictToParentElement exists, but I wasn't a fan of the implmentation
+// as it restricted the entire width of the piece to be within the parent.
+// This implementation has the piece center able to go to the edge of the board
+const restrictPiecesToBoard: Modifier = ({
+    containerNodeRect,
+    draggingNodeRect,
+    transform,
+}) => {
+
+    if (!draggingNodeRect || !containerNodeRect) {
+        return transform;
+    }
+
+    const squareSize = containerNodeRect.width / 8;
+ 
+    const originalPos = {
+        top:   draggingNodeRect.top - containerNodeRect.top,
+        left:  draggingNodeRect.left - containerNodeRect.left,
+    }
+    
+    const relativePos = {
+        top:   originalPos.top + transform.y,
+        left:  originalPos.left + transform.x,
+    }
+    
+    // Left guard has an extra pixel so that when a piece is on the edge, 
+    // the player can't make an unintentional move because the center of
+    // the piece won't be above a square anymore
+    const leftGuard = -Math.ceil((squareSize / 2) + 1)
+    const rightGuard = Math.ceil(containerNodeRect.width - squareSize - leftGuard)
+
+    if (relativePos.left <= leftGuard) {
+        transform.x = leftGuard - originalPos.left
+    }
+
+    if (relativePos.left >= rightGuard) {
+        transform.x = rightGuard - originalPos.left
+    }
+
+    if (relativePos.top <= leftGuard) {
+        transform.y = leftGuard - originalPos.top
+    }
+    
+    if (relativePos.top >= rightGuard) {
+        transform.y = rightGuard - originalPos.top
+    }
+
+    return transform;
+};
