@@ -42,6 +42,8 @@ interface DroppableChessCanvasBgProps {
 
 export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProps) {
     const boardRef = useRef<HTMLCanvasElement>(null);
+    const [devicePixelRatio, setDevicePixelRatio] = useState(window.devicePixelRatio || 1);
+
     const { isOver, setNodeRef } = useDroppable({
         id: 'chessboard',
     });
@@ -49,6 +51,25 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
     const dark = '#b58863';
     const light = '#f0d9b5';
 
+    // DPI listener events (zoom, moving between monitors)
+    useEffect(() => {
+        const updatePixelRatio = () => {
+            setDevicePixelRatio(window.devicePixelRatio || 1);
+        };
+
+        window.addEventListener('resize', updatePixelRatio);
+        
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', updatePixelRatio);
+        }
+
+        return () => {
+            window.removeEventListener('resize', updatePixelRatio);
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', updatePixelRatio);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const board = boardRef.current;
@@ -57,10 +78,16 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
         const ctx = board.getContext('2d');
         if (!ctx) return;
 
+        // Set size based on DPI
+        const displaySize = props.pxSize;
+        const canvasSize = displaySize * devicePixelRatio;
+        board.width = canvasSize;
+        board.height = canvasSize;
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+        board.style.width = displaySize + 'px';
+        board.style.height = displaySize + 'px';
 
         // 8x8 chessboard bg drawing
-        board.width = props.pxSize;
-        board.height = props.pxSize;
         ctx.fillStyle = light;
         ctx.fillRect(0, 0, props.pxSize, props.pxSize);
         ctx.fillStyle = dark;
@@ -162,7 +189,7 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
             ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
             ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
         }
-    }, [props.pxSize, props.colorPerspective, props.highlightHover, props.previousMove, props.previewMoves, props.draggingFromSquare, props.squareInCheck]);
+    }, [devicePixelRatio, props.pxSize, props.colorPerspective, props.showCoordinateLabels, props.highlightHover, props.previousMove, props.previewMoves, props.draggingFromSquare, props.squareInCheck]);
 
     return (
             <div
