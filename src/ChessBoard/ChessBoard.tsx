@@ -30,6 +30,7 @@ interface ChessBoardProps {
     pxSize: number;
     colorPerspective: Color;
     showMoveHints?: boolean;
+    showCoordinateLabels?: boolean;
     animationSpeedMs?: number;
     dragToMove?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
     getLegalMoves?: (square: Square) => Square[];
@@ -79,6 +80,7 @@ export default function ChessBoardView(
       pxSize, 
       colorPerspective, 
       showMoveHints = true, 
+      showCoordinateLabels = true,
       animationSpeedMs = 200,
       showCheck,
       dragToMove, 
@@ -165,6 +167,7 @@ export default function ChessBoardView(
                 <DroppableChessCanvasBg
                     pxSize={pxSize}
                     colorPerspective={colorPerspective}
+                    showCoordinateLabels={showCoordinateLabels}
                     highlightHover={hoveringPieceOver}
                     draggingFromSquare={currentDraggedPieceRef.current}
                     squareInCheck={squareInCheck}

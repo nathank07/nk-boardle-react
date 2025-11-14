@@ -31,6 +31,7 @@ export const mapPxToSquare = (x: number, y: number, pxSize: number, colorPerspec
 interface DroppableChessCanvasBgProps {
     pxSize: number;
     colorPerspective: Color;
+    showCoordinateLabels: boolean;
     highlightHover: Square | null;
     draggingFromSquare: Square | null;
     squareInCheck: Square | null;
@@ -69,6 +70,30 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
                 ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
             }
         });
+
+        // Draw coordinate labels
+        if (props.showCoordinateLabels) {
+            const rows = (props.colorPerspective === "w" ? "87654321" : "12345678").split("");
+            const cols = (props.colorPerspective === "w" ? "hgfedcba" : "abcdefgh").split("");
+            const fontSize = props.pxSize / 50;
+            ctx.font = `bold ${fontSize}px Arial`;
+
+            rows.forEach((element, index) => {
+                const squareSize = props.pxSize / 8;
+                const xOffset = fontSize / 4;
+                const yOffset = fontSize;
+                ctx.fillStyle = index % 2 ? light : dark;
+                ctx.fillText(element, xOffset, yOffset + index * squareSize);
+            });
+
+            cols.forEach((element, index) => {
+                const squareSize = props.pxSize / 8;
+                const xOffset = props.pxSize - fontSize * 0.9;
+                const yOffset = props.pxSize - fontSize / 4;
+                ctx.fillStyle = index % 2 ? light : dark;
+                ctx.fillText(element, xOffset - index * squareSize, yOffset);
+            });
+        }
 
         // If the user is dragging a piece and the api user wants 
         // to highlight the original square they're moving from
