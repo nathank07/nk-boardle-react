@@ -1,7 +1,7 @@
 import { Chess, Color, Square, PieceSymbol } from 'chess.js';
-import { useState, useEffect } from 'react';
-import { DndContext, Modifier, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { restrictToFirstScrollableAncestor, snapCenterToCursor } from '@dnd-kit/modifiers';
+import { useState, useEffect, useMemo } from 'react';
+import { DndContext, Modifier, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
 
 import DroppableChessCanvasBg from './DroppableChessCanvasBg';
 import { useChessPieceAnimations } from './ChessBoardPieces/AnimatedPieces';
@@ -30,6 +30,7 @@ interface ChessBoardProps {
     pxSize: number;
     colorPerspective: Color;
     showMoveHints?: boolean;
+    animationSpeedMs?: number;
     dragToMove?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
     getLegalMoves?: (square: Square) => Square[];
     showPreviousMove?: () => { from: Square, to: Square } | null;
@@ -78,33 +79,47 @@ export default function ChessBoardView(
       pxSize, 
       colorPerspective, 
       showMoveHints = true, 
+      animationSpeedMs = 200,
       showCheck,
       dragToMove, 
       getLegalMoves, 
       showPreviousMove }: ChessBoardProps
     ) {
+
     const [suppressAnimations, setSuppressAnimations] = useState(false);
     const [promotionView, setPromotionView] = useState<{ from: Square; to: Square } | null>(null);
+
+    const ignoreMoveAnimation = () => {
+        setSuppressAnimations(true);
+        setTimeout(() => setSuppressAnimations(false), animationSpeedMs + 50);
+    };
 
     useEffect(() => {
         setPromotionView(null);
     }, [pieces])
 
+    const viewPieces = useMemo(() => {
+        if (!promotionView) return pieces;
+        ignoreMoveAnimation();
+        const { [promotionView.from]: _, ...rest } = pieces;
+        return { ...rest, [promotionView.to]: pieces[promotionView.from] };
+    }, [pieces, promotionView]) as Record<Square, Piece>;
+
     const animatingPieces = useChessPieceAnimations({
-        pieces: pieces,
+        pieces: viewPieces,
         pxSize: pxSize,
         colorPerspective: colorPerspective,
-        suppressAnimations: suppressAnimations
+        suppressAnimations: suppressAnimations,
+        animationSpeedMs: animationSpeedMs
     });
 
     // Handle drag interactions  
     const { hoveringPieceOver, previewMoves, currentDraggedPieceRef, handleDragMove, handleDragDrop } = useChessDragHandlers({
-        pieces: pieces,
+        pieces: viewPieces,
         pxSize,
         colorPerspective,
         move: dragToMove ? (...args) => {
-            setSuppressAnimations(true);
-            setTimeout(() => setSuppressAnimations(false), 250);
+            ignoreMoveAnimation();
             dragToMove(...args);
         } : () => {},
         getPromotion: (from: Square, to: Square) => {
@@ -117,7 +132,16 @@ export default function ChessBoardView(
         )
     });
 
-    const previousMove = showPreviousMove ? showPreviousMove() ?? null : null;
+    const previousMove = (() => {
+        if (!showPreviousMove)
+            return null;
+
+        if (promotionView)
+            return promotionView;
+
+        return showPreviousMove();
+    })()
+
     const squareInCheck = showCheck ? showCheck() ?? null : null;
 
     const sensors = useSensors(
@@ -148,7 +172,7 @@ export default function ChessBoardView(
                     previewMoves={previewMoves}
                 >
                     <DraggablePieces
-                        pieces={pieces}
+                        pieces={viewPieces}
                         animatingPieces={animatingPieces}
                         pxSize={pxSize}
                         colorPerspective={colorPerspective}

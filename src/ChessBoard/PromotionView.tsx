@@ -51,7 +51,7 @@ export default function PromotionView({ color, moveWithPromotion, pxSize, onClic
 
     return <div
         style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.2)',
+            backgroundColor: 'rgba(0, 0, 0, 0.25)',
             width: pxSize,
             height: pxSize,
             position: 'absolute',
@@ -73,8 +73,6 @@ export default function PromotionView({ color, moveWithPromotion, pxSize, onClic
                     left: positions[key as PieceSymbol].x,
                     top: positions[key as PieceSymbol].y,
                     cursor: 'pointer',
-                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                    boxShadow: '-1px 0 2px rgba(0, 0, 0, 0.3)',
                     zIndex: 10000,
                 }}
                 onClick={() => moveWithPromotion(key as PieceSymbol)}

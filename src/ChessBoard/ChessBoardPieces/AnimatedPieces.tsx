@@ -168,11 +168,12 @@ interface ChessPieceAnimation {
     pieces: Record<Square, Piece>;
     pxSize: number;
     colorPerspective: Color;
+    animationSpeedMs: number;
     suppressAnimations: boolean;
 }
 
 // Custom hook for piece animations with automatic movement detection
-export const useChessPieceAnimations = ({ pieces, pxSize, colorPerspective, suppressAnimations }: ChessPieceAnimation) => {
+export const useChessPieceAnimations = ({ pieces, pxSize, colorPerspective, animationSpeedMs = 200, suppressAnimations }: ChessPieceAnimation) => {
 
     const [animatingPieces, setAnimatingPieces] = useState<Array<{
         id: string;
@@ -191,7 +192,7 @@ export const useChessPieceAnimations = ({ pieces, pxSize, colorPerspective, supp
     );
     
     const animateMovements = useCallback((oldPieces: Record<Square, Piece>, movements: Array<{ from: Square; to: Square }>) => {
-        const animationDuration = animatingPieces.length > 0 ? 0 : 200; // ms
+        const animationDuration = animatingPieces.length > 0 ? 0 : animationSpeedMs;
         const animations = movements.map((movement, index) => {
             const piece = oldPieces[movement.from];
             if (!piece) return null;

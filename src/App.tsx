@@ -169,6 +169,7 @@ function App() {
                 (isCapture ? playCaptureSound : playMoveSound)();
                 setPieces(getPieces(chessGame));
             }}
+            animationSpeedMs={150}
             getLegalMoves={(squares) => getMovesForSquare(chessGame, squares)}
             showPreviousMove={() => getPreviousMove(chessGame)}
             showCheck={() => {
