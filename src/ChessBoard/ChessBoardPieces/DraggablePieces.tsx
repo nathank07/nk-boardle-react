@@ -26,15 +26,22 @@ export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, g
     const currentDraggedPieceRef = useRef<Square | null>(null);
     const promotionSquares = ['a8', 'b8', 'c8', 'd8', 'e8', 'f8', 'g8', 'h8', 'a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'h1'];
 
+    const onDragCancel = useCallback(() => {
+        setHoveringPieceOver(null);
+        setPreviewMoves({ moves: [], takeables: [] });
+        previousPositionRef.current = { x: 0, y: 0 };
+        currentDraggedPieceRef.current = null;
+    }, []);
+
     const handleDragDrop = useCallback((event: any) => {
-        event.activatorEvent.target.style.zIndex = 1;
         setHoveringPieceOver(null);
         setPreviewMoves({ moves: [], takeables: [] });
         // Reset the position tracking and current dragged piece
         previousPositionRef.current = { x: 0, y: 0 };
         currentDraggedPieceRef.current = null;
         
-        if(!event.over) return        
+        if(!event || !event.over) return
+        event.activatorEvent.target.style.zIndex = 1;
         const {x, y} = event.delta;
         const oldSquare = event.active.id as Square;
         const rect = mapSquareToPxRect(oldSquare, pxSize, colorPerspective);
@@ -106,6 +113,7 @@ export const useChessDragHandlers = ({ pieces, pxSize, colorPerspective, move, g
         currentDraggedPieceRef,
         handleDragMove,
         handleDragDrop,
+        onDragCancel
     };
 };
 

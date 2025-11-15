@@ -1,9 +1,11 @@
 import { Chess, Color, Square, PieceSymbol } from 'chess.js';
-import { useState, useEffect, useMemo } from 'react';
-import { DndContext, Modifier, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { useState, useEffect, useMemo, useRef, use } from 'react';
+import { DndContext, Modifier, PointerSensor, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { getOwnerDocument } from "@dnd-kit/utilities"
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
 
-import DroppableChessCanvasBg from './DroppableChessCanvasBg';
+import DroppableChessCanvasBg, { mapPxToSquare } from './DroppableChessCanvasBg';
+import DrawableChessArrowsOverlay, { useMarkings } from './DrawableChessArrowsOverlay';
 import { useChessPieceAnimations } from './ChessBoardPieces/AnimatedPieces';
 import AnimatedPieces from './ChessBoardPieces/AnimatedPieces';
 import DraggablePieces, { useChessDragHandlers } from './ChessBoardPieces/DraggablePieces';
@@ -32,6 +34,16 @@ interface ChessBoardProps {
     showMoveHints?: boolean;
     showCoordinateLabels?: boolean;
     animationSpeedMs?: number;
+    userArrowColor?: string;
+    userSquareColor?: string;
+    drawnMarkings?: { 
+        arrows: { from: Square; to: Square, inProgress: boolean, color: string }[];
+        squares: { square: Square; inProgress: boolean, color: string }[];
+    };
+    modifyDrawnMarkings?: (markings: { 
+        arrows: { from: Square; to: Square, inProgress: boolean, color?: string }[];
+        squares: { square: Square; inProgress: boolean, color?: string }[];
+    }) => void;
     dragToMove?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
     getLegalMoves?: (square: Square) => Square[];
     showPreviousMove?: () => { from: Square, to: Square } | null;
@@ -82,7 +94,14 @@ export default function ChessBoardView(
       showMoveHints = true, 
       showCoordinateLabels = true,
       animationSpeedMs = 200,
-      showCheck,
+      userArrowColor = 'rgba(255, 165, 0, 0.65)',
+      userSquareColor = 'rgba(255, 0, 0, 0.25)',
+      drawnMarkings = {
+          arrows: [],
+          squares: []
+      },
+      modifyDrawnMarkings = () => {},
+      showCheck = () => { return null },
       dragToMove, 
       getLegalMoves, 
       showPreviousMove }: ChessBoardProps
@@ -116,7 +135,7 @@ export default function ChessBoardView(
     });
 
     // Handle drag interactions  
-    const { hoveringPieceOver, previewMoves, currentDraggedPieceRef, handleDragMove, handleDragDrop } = useChessDragHandlers({
+    const { hoveringPieceOver, previewMoves, currentDraggedPieceRef, handleDragMove, handleDragDrop, onDragCancel } = useChessDragHandlers({
         pieces: viewPieces,
         pxSize,
         colorPerspective,
@@ -144,10 +163,40 @@ export default function ChessBoardView(
         return showPreviousMove();
     })()
 
-    const squareInCheck = showCheck ? showCheck() ?? null : null;
+    const { userDrawnSquares, userDrawnArrows, handleMarkingsMouseDown, handleMarkingsMouseDrag, handleMarkingsMouseUp } = useMarkings({
+        pxSize,
+        colorPerspective,
+        arrowColor: userArrowColor,
+        squareColor: userSquareColor,
+    });
+
+    const handleMouseDown = (event: React.MouseEvent) => {
+        if (event.button !== 2) return;
+
+        if (currentDraggedPieceRef.current) {
+            // Cancel drag operation
+            const pointerCancelEvent = new PointerEvent('pointercancel', {
+                bubbles: true,
+                cancelable: true,
+                pointerId: 1,
+                clientX: event.clientX,
+                clientY: event.clientY,
+            });
+            (event.target as HTMLElement).style.zIndex = '1';
+            getOwnerDocument(event.target as Node).dispatchEvent(pointerCancelEvent);
+            return;
+        }
+
+        handleMarkingsMouseDown(event);
+        modifyDrawnMarkings({
+            arrows:  [...drawnMarkings.arrows, ...userDrawnArrows],
+            squares: [...drawnMarkings.squares, ...userDrawnSquares],
+        });
+
+    };
 
     const sensors = useSensors(
-        useSensor(MouseSensor),
+        useSensor(PointerSensor),
         useSensor(TouchSensor),
         // A keyboard sensor would be nice, but dnd-kit's implementation
         // has scrolling effects that don't really work well with a chessboard
@@ -156,10 +205,22 @@ export default function ChessBoardView(
     );
 
     return (
-        <div style={{ position: 'relative', width: pxSize, height: pxSize }}>
+        <div 
+            style={{ position: 'relative', width: pxSize, height: pxSize }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMarkingsMouseDrag}
+            onMouseUp={handleMarkingsMouseUp}
+            onContextMenu={(e) => e.preventDefault()}
+        >
+            <DrawableChessArrowsOverlay
+                pxSize={pxSize}
+                colorPerspective={colorPerspective}
+                drawnArrows={[...drawnMarkings.arrows, ...userDrawnArrows]}
+            />
             <DndContext 
                 onDragEnd={handleDragDrop} 
                 onDragMove={handleDragMove}
+                onDragCancel={onDragCancel}
                 modifiers={[snapCenterToCursor, restrictPiecesToBoard]}
                 autoScroll={false}
                 sensors={sensors}
@@ -170,9 +231,10 @@ export default function ChessBoardView(
                     showCoordinateLabels={showCoordinateLabels}
                     highlightHover={hoveringPieceOver}
                     draggingFromSquare={currentDraggedPieceRef.current}
-                    squareInCheck={squareInCheck}
+                    squareInCheck={showCheck()}
                     previousMove={previousMove}
                     previewMoves={previewMoves}
+                    highlightedSquares={[...drawnMarkings.squares, ...userDrawnSquares]}
                 >
                     <DraggablePieces
                         pieces={viewPieces}

@@ -37,6 +37,7 @@ interface DroppableChessCanvasBgProps {
     squareInCheck: Square | null;
     previousMove: { from: Square; to: Square } | null;
     previewMoves: { moves: Square[]; takeables: Square[] } | null;
+    highlightedSquares: { square: Square; color: string, inProgress: boolean }[] | null;
     children: React.ReactNode;
 }
 
@@ -189,7 +190,36 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
             ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
             ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
         }
-    }, [devicePixelRatio, props.pxSize, props.colorPerspective, props.showCoordinateLabels, props.highlightHover, props.previousMove, props.previewMoves, props.draggingFromSquare, props.squareInCheck]);
+
+        // Show highlighted squares
+        if (props.highlightedSquares) {
+            props.highlightedSquares.forEach(({ square, color, inProgress }) => {
+                const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
+                if (!inProgress) {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+                }
+                // Show circle for hovering and right clicking square, might remove this later
+                else {
+                    ctx.lineWidth = 6;
+                    ctx.strokeStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width * 0.35, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+            });
+        }
+    }, [devicePixelRatio, 
+        props.pxSize, 
+        props.colorPerspective, 
+        props.showCoordinateLabels, 
+        props.highlightHover, 
+        props.previousMove, 
+        props.previewMoves, 
+        props.draggingFromSquare, 
+        props.squareInCheck,
+        props.highlightedSquares
+    ]);
 
     return (
             <div
