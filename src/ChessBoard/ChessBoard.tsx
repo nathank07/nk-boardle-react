@@ -163,7 +163,8 @@ export default function ChessBoardView(
         return showPreviousMove();
     })()
 
-    const { userDrawnSquares, userDrawnArrows, handleMarkingsMouseDown, handleMarkingsMouseDrag, handleMarkingsMouseUp } = useMarkings({
+    const { userDrawnSquares, userDrawnArrows, clearUserArrows, clearUserSquares, 
+            handleMarkingsMouseDown, handleMarkingsMouseDrag, handleMarkingsMouseUp, handleMarkingsMouseLeave } = useMarkings({
         pxSize,
         colorPerspective,
         arrowColor: userArrowColor,
@@ -171,6 +172,12 @@ export default function ChessBoardView(
     });
 
     const handleMouseDown = (event: React.MouseEvent) => {
+        if (event.button === 0) {
+            clearUserArrows();
+            clearUserSquares();
+            return;
+        }
+
         if (event.button !== 2) return;
 
         if (currentDraggedPieceRef.current) {
@@ -210,6 +217,7 @@ export default function ChessBoardView(
             onMouseDown={handleMouseDown}
             onMouseMove={handleMarkingsMouseDrag}
             onMouseUp={handleMarkingsMouseUp}
+            onMouseLeave={handleMarkingsMouseLeave}
             onContextMenu={(e) => e.preventDefault()}
         >
             <DrawableChessArrowsOverlay
@@ -230,6 +238,7 @@ export default function ChessBoardView(
                     colorPerspective={colorPerspective}
                     showCoordinateLabels={showCoordinateLabels}
                     highlightHover={hoveringPieceOver}
+                    userHighlightColor={userSquareColor}
                     draggingFromSquare={currentDraggedPieceRef.current}
                     squareInCheck={showCheck()}
                     previousMove={previousMove}

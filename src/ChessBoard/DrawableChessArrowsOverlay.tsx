@@ -57,7 +57,7 @@ export const useMarkings = ({ pxSize, colorPerspective, arrowColor, squareColor 
     const [userDrawnArrows, setUserDrawnArrows] = useState<{ from: Square; to: Square, inProgress: boolean, color: string }[]>([]);
     const [userDrawnSquares, setUserDrawnSquares] = useState<{ square: Square; inProgress: boolean, color: string }[]>([]);
     const removeInProgress = () => {
-        setUserDrawnSquares(prev => prev.filter(obj => !(obj.inProgress && obj.color === arrowColor)));
+        setUserDrawnSquares(prev => prev.filter(obj => !(obj.inProgress && obj.color === squareColor)));
         setUserDrawnArrows(prev => prev.filter(obj => !(obj.inProgress && obj.color === arrowColor)));
     }
 
@@ -72,7 +72,7 @@ export const useMarkings = ({ pxSize, colorPerspective, arrowColor, squareColor 
         const square = getSquare(event);
         if (!square) return;
         setActiveMarking({ from: square, to: square });
-        setUserDrawnSquares(prev => [...prev, { square, inProgress: true, color: arrowColor }]);
+        setUserDrawnSquares(prev => [...prev, { square, inProgress: true, color: squareColor }]);
     }
 
     const handleMarkingsMouseDrag = (event: React.MouseEvent) => {
@@ -85,7 +85,7 @@ export const useMarkings = ({ pxSize, colorPerspective, arrowColor, squareColor 
             if (activeMarking.from !== square) {
                 setUserDrawnArrows(prev => [...prev, { from: activeMarking.from, to: square, inProgress: true, color: arrowColor }]);
             } else {
-                setUserDrawnSquares(prev => [...prev, { square: activeMarking.from, inProgress: true, color: arrowColor }]);
+                setUserDrawnSquares(prev => [...prev, { square: activeMarking.from, inProgress: true, color: squareColor }]);
             }
         }
     }
@@ -110,16 +110,21 @@ export const useMarkings = ({ pxSize, colorPerspective, arrowColor, squareColor 
                 removeInProgress();
             }
             setActiveMarking(null);
-            console.log('Right click ended on square:', endSquare);
         }
     }
 
     return {
         userDrawnSquares,
         userDrawnArrows,
+        clearUserArrows: () => setUserDrawnArrows([]),
+        clearUserSquares: () => setUserDrawnSquares([]),
         handleMarkingsMouseDown,
         handleMarkingsMouseDrag,
         handleMarkingsMouseUp,
+        handleMarkingsMouseLeave: () => {
+            removeInProgress();
+            setActiveMarking(null);
+        }
     }
 }
 

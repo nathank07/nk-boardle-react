@@ -37,6 +37,7 @@ interface DroppableChessCanvasBgProps {
     squareInCheck: Square | null;
     previousMove: { from: Square; to: Square } | null;
     previewMoves: { moves: Square[]; takeables: Square[] } | null;
+    userHighlightColor?: string;
     highlightedSquares: { square: Square; color: string, inProgress: boolean }[] | null;
     children: React.ReactNode;
 }
@@ -193,21 +194,33 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
 
         // Show highlighted squares
         if (props.highlightedSquares) {
+            // inProgress tracks if the user is holding down right click
+            // so we need to track not in progress (fill), in progress (circle), and already in progress (x)
+            type State = "active" | "inProgress" | "inActiveProgress"
+
+            // State should correspond to square+color combination
+            // string is a square-color string pair
+            const squareColors = new Map<string, { state: State }>();
+
             props.highlightedSquares.forEach(({ square, color, inProgress }) => {
-                const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
-                if (!inProgress) {
-                    ctx.fillStyle = color;
-                    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-                }
-                // Show circle for hovering and right clicking square, might remove this later
-                else {
-                    ctx.lineWidth = 6;
-                    ctx.strokeStyle = color;
-                    ctx.beginPath();
-                    ctx.arc(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width * 0.35, 0, 2 * Math.PI);
-                    ctx.stroke();
+                if (squareColors.has(`${square}-${color}`)) {
+                    squareColors.set(`${square}-${color}`, { state: "inActiveProgress" });
+                } else {
+                    squareColors.set(`${square}-${color}`, { state: inProgress ? "inProgress" : "active" });
                 }
             });
+
+            squareColors.forEach(({ state }, key) => {
+                const [square, color] = key.split('-') as [Square, string];
+                const rect = mapSquareToPxRect(square, props.pxSize, props.colorPerspective);
+                if (state === "active") {
+                    drawShape(ctx, 'filled', rect, color);
+                } else if (state === "inProgress") {
+                    drawShape(ctx, 'circle', rect, color, 6);
+                } else if (state === "inActiveProgress") {
+                    drawShape(ctx, 'x', rect, color, 6);
+                }
+            })
         }
     }, [devicePixelRatio, 
         props.pxSize, 
@@ -237,4 +250,47 @@ export default function DroppableChessCanvasBg(props: DroppableChessCanvasBgProp
                 {props.children}
             </div>
     );
+}
+
+type Shape = 'circle' | 'x' | 'filled' | 'filled outline';
+
+const drawShape = (ctx: CanvasRenderingContext2D,
+                   shape: Shape,
+                   rect: { x: number; y: number; width: number; height: number },
+                   color: string,
+                   width?: number,
+                   outline_color?: string): void => {
+    switch (shape) {
+        case 'circle':
+            ctx.lineWidth = width ?? 1;
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.arc(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width * 0.33, 0, 2 * Math.PI);
+            ctx.stroke();
+            break;
+        case 'x':
+            ctx.lineWidth = width ?? 1;
+            ctx.strokeStyle = color;
+            const centerX = rect.x + rect.width / 2;
+            const centerY = rect.y + rect.height / 2;
+            const r = rect.width * 0.51;
+            const lineWidth = ctx.lineWidth;
+            ctx.beginPath();
+            ctx.moveTo(centerX - r + lineWidth / 2, centerY - r + lineWidth / 2);
+            ctx.lineTo(centerX + r - lineWidth / 2, centerY + r - lineWidth / 2);
+            ctx.moveTo(centerX + r - lineWidth / 2, centerY - r + lineWidth / 2);
+            ctx.lineTo(centerX - r + lineWidth / 2, centerY + r - lineWidth / 2);
+            ctx.stroke();
+            break;
+        case 'filled':
+            ctx.fillStyle = color;
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            break;
+        case 'filled outline':
+            ctx.fillStyle = color;
+            ctx.strokeStyle = outline_color ?? 'black';
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+            break;
+    }
 }

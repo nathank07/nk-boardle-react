@@ -175,6 +175,10 @@ function App() {
             showCheck={() => {
                 return chessGame.inCheck() ? chessGame.findPiece({ color: chessGame.turn(), type: "k"})[0] : null;
             }}
+            drawnMarkings={{
+                arrows: [{ from: "e2", to: "a8", color: 'rgba(0,0,0,0.25)', inProgress: false }],
+                squares: [{ square: "e4", color: 'rgba(0, 0, 0, 0.25)', inProgress: false }]
+            }}
         />
 
         <p>
