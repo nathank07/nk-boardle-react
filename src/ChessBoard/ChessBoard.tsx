@@ -36,14 +36,10 @@ interface ChessBoardProps {
     animationSpeedMs?: number;
     userArrowColor?: string;
     userSquareColor?: string;
-    drawnMarkings?: { 
-        arrows: { from: Square; to: Square, inProgress: boolean, color: string }[];
-        squares: { square: Square; inProgress: boolean, color: string }[];
-    };
-    modifyDrawnMarkings?: (markings: { 
-        arrows: { from: Square; to: Square, inProgress: boolean, color?: string }[];
-        squares: { square: Square; inProgress: boolean, color?: string }[];
-    }) => void;
+    drawnSquares?: { square: Square; inProgress: boolean, color: string }[];
+    drawnArrows?: { from: Square; to: Square, inProgress: boolean, color: string }[];
+    modifyDrawnSquares?: (squares: { square: Square; inProgress: boolean, color: string }[]) => void;
+    modifyDrawnArrows?: (arrows: { from: Square; to: Square, inProgress: boolean, color: string }[]) => void;
     dragToMove?: (from: Square, to: Square, promotion?: PieceSymbol) => void;
     getLegalMoves?: (square: Square) => Square[];
     showPreviousMove?: () => { from: Square, to: Square } | null;
@@ -96,11 +92,10 @@ export default function ChessBoardView(
       animationSpeedMs = 200,
       userArrowColor = 'rgba(255, 165, 0, 0.65)',
       userSquareColor = 'rgba(255, 0, 0, 0.25)',
-      drawnMarkings = {
-          arrows: [],
-          squares: []
-      },
-      modifyDrawnMarkings = () => {},
+      drawnSquares = [],
+      drawnArrows = [],
+      modifyDrawnSquares = (_) => {},
+      modifyDrawnArrows = (_) => {},
       showCheck = () => { return null },
       dragToMove, 
       getLegalMoves, 
@@ -116,6 +111,11 @@ export default function ChessBoardView(
     };
 
     useEffect(() => {
+        handleMarkingsMouseLeave();
+        clearUserArrows();
+        clearUserSquares();
+        modifyDrawnArrows([]);
+        modifyDrawnSquares([]);
         setPromotionView(null);
     }, [pieces])
 
@@ -173,6 +173,7 @@ export default function ChessBoardView(
 
     const handleMouseDown = (event: React.MouseEvent) => {
         if (event.button === 0) {
+            handleMarkingsMouseLeave();
             clearUserArrows();
             clearUserSquares();
             return;
@@ -195,11 +196,6 @@ export default function ChessBoardView(
         }
 
         handleMarkingsMouseDown(event);
-        modifyDrawnMarkings({
-            arrows:  [...drawnMarkings.arrows, ...userDrawnArrows],
-            squares: [...drawnMarkings.squares, ...userDrawnSquares],
-        });
-
     };
 
     const sensors = useSensors(
@@ -223,7 +219,7 @@ export default function ChessBoardView(
             <DrawableChessArrowsOverlay
                 pxSize={pxSize}
                 colorPerspective={colorPerspective}
-                drawnArrows={[...drawnMarkings.arrows, ...userDrawnArrows]}
+                drawnArrows={[...drawnArrows, ...userDrawnArrows]}
             />
             <DndContext 
                 onDragEnd={handleDragDrop} 
@@ -243,7 +239,7 @@ export default function ChessBoardView(
                     squareInCheck={showCheck()}
                     previousMove={previousMove}
                     previewMoves={previewMoves}
-                    highlightedSquares={[...drawnMarkings.squares, ...userDrawnSquares]}
+                    highlightedSquares={[...drawnSquares, ...userDrawnSquares]}
                 >
                     <DraggablePieces
                         pieces={viewPieces}

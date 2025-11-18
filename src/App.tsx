@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
@@ -124,6 +124,8 @@ function App() {
   const [chessGame, setChessGame] = useState(new Chess())
   const [pieces, setPieces] = useState(getPieces(chessGame));
   const [colorPerspective, setColorPerspective] = useState('w')
+  const [arrows, setArrows] = useState<{ from: Square; to: Square, inProgress: boolean, color: string }[]>([]);
+  const [squares, setSquares] = useState<{ square: Square; inProgress: boolean, color: string }[]>([]);
   const [playMoveSound] = useSound(move);
   const [playCaptureSound] = useSound(capture);
 
@@ -144,6 +146,18 @@ function App() {
             const newChessGame = await ChessTest(chessGame);
             setChessGame(newChessGame);
             setPieces(getPieces(newChessGame));
+            setColorPerspective(newChessGame.turn());
+            setTimeout(() => {
+                  const wK = newChessGame.findPiece({ color: 'w', type: 'k' })[0];
+                  const bK = newChessGame.findPiece({ color: 'b', type: 'k' })[0];
+                  setArrows([{ from: wK as Square, to: bK as Square, color: 'rgba(0,0,0,0.25)', inProgress: false }]);
+                  newChessGame.findPiece({ color: 'b', type: 'q' }).forEach((sq) => {
+                        setSquares(prev => [...prev, { square: sq as Square, color: 'rgba(0,0,0,0.25)', inProgress: false }]);
+                  });
+                  newChessGame.findPiece({ color: 'w', type: 'q' }).forEach((sq) => {
+                        setSquares(prev => [...prev, { square: sq as Square, color: 'rgba(0,0,0,0.25)', inProgress: false }]);
+                  });
+            }, 5)
         }}>
           count is {count}
         </button>
@@ -175,9 +189,13 @@ function App() {
             showCheck={() => {
                 return chessGame.inCheck() ? chessGame.findPiece({ color: chessGame.turn(), type: "k"})[0] : null;
             }}
-            drawnMarkings={{
-                arrows: [{ from: "e2", to: "a8", color: 'rgba(0,0,0,0.25)', inProgress: false }],
-                squares: [{ square: "e4", color: 'rgba(0, 0, 0, 0.25)', inProgress: false }]
+            drawnSquares={squares}
+            drawnArrows={arrows}
+            modifyDrawnArrows={(arrows) => {
+                setArrows(arrows);
+            }}
+            modifyDrawnSquares={(squares) => {
+                setSquares(squares);
             }}
         />
 
